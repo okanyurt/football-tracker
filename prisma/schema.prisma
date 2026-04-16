@@ -24,6 +24,7 @@ model Match {
   location    String?
   totalCost   Float
   notes       String?
+  cancelledAt DateTime?
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
 
@@ -43,12 +44,14 @@ model MatchPlayer {
 }
 
 model Payment {
-  id        String   @id @default(cuid())
-  playerId  String
-  amount    Float
-  date      DateTime @default(now())
-  notes     String?
-  createdAt DateTime @default(now())
+  id          String    @id @default(cuid())
+  playerId    String
+  amount      Float
+  date        DateTime  @default(now())
+  notes       String?
+  isKasa      Boolean   @default(false)
+  cancelledAt DateTime?
+  createdAt   DateTime  @default(now())
 
-  player    Player   @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  player      Player    @relation(fields: [playerId], references: [id], onDelete: Cascade)
 }

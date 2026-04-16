@@ -16,6 +16,7 @@ interface Match {
   location: string | null;
   totalCost: number;
   notes: string | null;
+  cancelledAt: string | null;
   matchPlayers: { player: Player }[];
 }
 
@@ -80,9 +81,13 @@ export default function MatchesPage() {
     load();
   };
 
-  const handleDelete = async (id: string) => {
-    if (!confirm("Delete this match?")) return;
-    await fetch(`/api/matches/${id}`, { method: "DELETE" });
+  const handleCancel = async (match: Match) => {
+    const isCancelled = !!match.cancelledAt;
+    const msg = isCancelled
+      ? "Bu maçın iptali geri alınsın mı?"
+      : "Bu maçı iptal etmek istediğine emin misin? Oyuncuların borçları sıfırlanacak.";
+    if (!confirm(msg)) return;
+    await fetch(`/api/matches/${match.id}`, { method: "PATCH" });
     load();
   };
 
@@ -130,45 +135,59 @@ export default function MatchesPage() {
           {matches.map((match) => (
             <div
               key={match.id}
-              className="bg-white rounded-xl border border-gray-200 p-4 flex items-center justify-between hover:border-green-200 transition-colors"
+              className={`rounded-xl border p-4 flex items-center justify-between transition-colors ${
+                match.cancelledAt
+                  ? "bg-gray-50 border-gray-200 opacity-60"
+                  : "bg-white border-gray-200 hover:border-green-200"
+              }`}
             >
               <div className="flex items-center gap-4">
-                <div className="bg-green-50 rounded-lg p-2 text-center min-w-[56px]">
-                  <p className="text-xs text-green-600 font-medium">
+                <div className={`rounded-lg p-2 text-center min-w-[56px] ${match.cancelledAt ? "bg-gray-100" : "bg-green-50"}`}>
+                  <p className={`text-xs font-medium ${match.cancelledAt ? "text-gray-400" : "text-green-600"}`}>
                     {format(new Date(match.date), "MMM").toUpperCase()}
                   </p>
-                  <p className="text-xl font-bold text-green-800">
+                  <p className={`text-xl font-bold ${match.cancelledAt ? "text-gray-400" : "text-green-800"}`}>
                     {format(new Date(match.date), "d")}
                   </p>
                 </div>
                 <div>
-                  <Link
-                    href={`/matches/${match.id}`}
-                    className="font-medium text-gray-900 hover:text-green-700"
-                  >
-                    {match.location || "Football"}
-                  </Link>
-                  <p className="text-sm text-gray-500 mt-0.5">
-                    {match.matchPlayers.length} players · ₺{match.totalCost.toFixed(2)} total
+                  <div className="flex items-center gap-2">
+                    <Link
+                      href={`/matches/${match.id}`}
+                      className={`font-medium ${match.cancelledAt ? "line-through text-gray-400" : "text-gray-900 hover:text-green-700"}`}
+                    >
+                      {match.location || "Football"}
+                    </Link>
+                    {match.cancelledAt && (
+                      <span className="text-xs bg-red-100 text-red-500 px-1.5 py-0.5 rounded font-medium">İptal</span>
+                    )}
+                  </div>
+                  <p className="text-sm text-gray-400 mt-0.5">
+                    {match.matchPlayers.length} oyuncu · ₺{match.totalCost.toFixed(2)}
                   </p>
-                  <p className="text-xs text-gray-400 mt-0.5">
+                  <p className="text-xs text-gray-300 mt-0.5">
                     {match.matchPlayers.map((mp) => mp.player.name).join(", ")}
                   </p>
                 </div>
               </div>
               <div className="flex items-center gap-3">
-                <div className="text-right">
-                  <p className="text-sm text-gray-500">Per player</p>
-                  <p className="font-bold text-gray-900">
-                    ₺{(match.totalCost / Math.max(match.matchPlayers.length, 1)).toFixed(2)}
-                  </p>
-                </div>
+                {!match.cancelledAt && (
+                  <div className="text-right">
+                    <p className="text-sm text-gray-500">Kişi başı</p>
+                    <p className="font-bold text-gray-900">
+                      ₺{(match.totalCost / Math.max(match.matchPlayers.length, 1)).toFixed(2)}
+                    </p>
+                  </div>
+                )}
                 <button
-                  onClick={() => handleDelete(match.id)}
-                  className="text-gray-300 hover:text-red-500 text-xl leading-none ml-2"
-                  title="Delete"
+                  onClick={() => handleCancel(match)}
+                  className={`text-xs border px-2.5 py-1 rounded-md font-medium transition-colors ${
+                    match.cancelledAt
+                      ? "border-green-200 text-green-600 hover:bg-green-50"
+                      : "border-red-200 text-red-400 hover:bg-red-50"
+                  }`}
                 >
-                  ×
+                  {match.cancelledAt ? "Geri Al" : "İptal Et"}
                 </button>
               </div>
             </div>

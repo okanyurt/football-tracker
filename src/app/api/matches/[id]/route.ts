@@ -22,6 +22,20 @@ export async function GET(
   return NextResponse.json(match);
 }
 
+export async function PATCH(
+  _req: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { id } = await params;
+  const match = await prisma.match.findUnique({ where: { id } });
+  if (!match) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  const updated = await prisma.match.update({
+    where: { id },
+    data: { cancelledAt: match.cancelledAt ? null : new Date() },
+  });
+  return NextResponse.json(updated);
+}
+
 export async function DELETE(
   _req: Request,
   { params }: { params: Promise<{ id: string }> }

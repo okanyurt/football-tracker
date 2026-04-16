@@ -21,11 +21,12 @@ export async function GET(
     return NextResponse.json({ error: "Player not found" }, { status: 404 });
   }
 
-  const totalOwed = player.matchPlayers.reduce(
-    (sum, mp) => sum + mp.amountOwed,
-    0
-  );
-  const totalPaid = player.payments.reduce((sum, p) => sum + p.amount, 0);
+  const totalOwed = player.matchPlayers
+    .filter((mp) => !mp.match.cancelledAt)
+    .reduce((sum, mp) => sum + mp.amountOwed, 0);
+  const totalPaid = player.payments
+    .filter((p) => !p.cancelledAt)
+    .reduce((sum, p) => sum + p.amount, 0);
 
   return NextResponse.json({ ...player, balance: totalPaid - totalOwed, totalOwed, totalPaid });
 }

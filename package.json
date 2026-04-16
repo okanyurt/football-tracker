@@ -1,9 +1,9 @@
 {
-  "name": "halisaha-tracker",
-  "version": "0.1.0",
+  "name": "football-tracker",
+  "version": "0.2.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev --turbopack",
     "build": "next build",
     "start": "next start",
     "db:push": "prisma db push",

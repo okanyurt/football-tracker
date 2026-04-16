@@ -19,6 +19,9 @@ export default function DashboardPage() {
   const [payModal, setPayModal] = useState<Player | null>(null);
   const [payAmount, setPayAmount] = useState("");
   const [payNotes, setPayNotes] = useState("");
+  const [kasaModal, setKasaModal] = useState<Player | null>(null);
+  const [kasaAmount, setKasaAmount] = useState("");
+  const [kasaNotes, setKasaNotes] = useState("");
   const [saving, setSaving] = useState(false);
 
   const load = useCallback(async () => {
@@ -47,10 +50,28 @@ export default function DashboardPage() {
     load();
   };
 
-  const sorted = [...players].sort((a, b) => a.balance - b.balance);
+  const handleKasa = async () => {
+    if (!kasaModal || !kasaAmount) return;
+    setSaving(true);
+    await fetch("/api/payments", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ playerId: kasaModal.id, amount: kasaAmount, notes: kasaNotes || "Kasa yüklemesi", isKasa: true }),
+    });
+    setKasaModal(null);
+    setKasaAmount("");
+    setKasaNotes("");
+    setSaving(false);
+    load();
+  };
+
+  const sorted = [...players].sort((a, b) => {
+    const rank = (p: Player) => p.balance < 0 ? 0 : p.balance > 0 ? 1 : 2;
+    if (rank(a) !== rank(b)) return rank(a) - rank(b);
+    return a.balance - b.balance;
+  });
   const totalDebt = players.filter((p) => p.balance < 0).reduce((sum, p) => sum + Math.abs(p.balance), 0);
-  const debtorCount = players.filter((p) => p.balance < 0).length;
-  const settledCount = players.filter((p) => p.balance >= 0).length;
+  const totalKasa = players.filter((p) => p.balance > 0).reduce((sum, p) => sum + p.balance, 0);
 
   if (loading) {
     return (
@@ -84,13 +105,9 @@ export default function DashboardPage() {
           <p className="text-xs text-red-400 uppercase tracking-wider">Outstanding Debt</p>
           <p className="text-2xl font-bold text-red-600 mt-0.5">₺{totalDebt.toFixed(0)}</p>
         </div>
-        <div className="bg-green-50 rounded-xl border border-green-100 px-4 py-3">
-          <p className="text-xs text-green-500 uppercase tracking-wider">Settled / Owes</p>
-          <p className="text-2xl font-bold text-green-700 mt-0.5">
-            {settledCount}
-            <span className="text-base font-normal text-gray-400 mx-1">/</span>
-            <span className="text-red-500">{debtorCount}</span>
-          </p>
+        <div className="bg-blue-50 rounded-xl border border-blue-100 px-4 py-3">
+          <p className="text-xs text-blue-400 uppercase tracking-wider">Kasa</p>
+          <p className="text-2xl font-bold text-blue-600 mt-0.5">+₺{totalKasa.toFixed(0)}</p>
         </div>
       </div>
 
@@ -131,14 +148,22 @@ export default function DashboardPage() {
                     </span>
                   </td>
                   <td className="px-4 py-3 text-right">
-                    {isDebt && (
+                    <div className="flex gap-1.5 justify-end">
+                      {isDebt && (
+                        <button
+                          onClick={() => { setPayModal(player); setPayAmount(String(Math.abs(player.balance))); }}
+                          className="text-xs bg-green-50 hover:bg-green-100 text-green-700 border border-green-200 px-2.5 py-1 rounded-md font-medium transition-colors"
+                        >
+                          Pay
+                        </button>
+                      )}
                       <button
-                        onClick={() => { setPayModal(player); setPayAmount(String(Math.abs(player.balance))); }}
-                        className="text-xs bg-green-50 hover:bg-green-100 text-green-700 border border-green-200 px-2.5 py-1 rounded-md font-medium transition-colors"
+                        onClick={() => { setKasaModal(player); setKasaAmount(""); }}
+                        className="text-xs bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 px-2.5 py-1 rounded-md font-medium transition-colors"
                       >
-                        Pay
+                        Kasa+
                       </button>
-                    )}
+                    </div>
                   </td>
                 </tr>
               );
@@ -146,6 +171,55 @@ export default function DashboardPage() {
           </tbody>
         </table>
       </div>
+
+      {kasaModal && (
+        <Modal title={`Kasa Yükle — ${kasaModal.name}`} onClose={() => { setKasaModal(null); setKasaAmount(""); setKasaNotes(""); }}>
+          <div className="space-y-4">
+            <div className="bg-blue-50 rounded-lg p-3 text-sm flex justify-between">
+              <span className="text-gray-500">Mevcut bakiye</span>
+              <span className={`font-bold ${kasaModal.balance >= 0 ? "text-blue-600" : "text-red-600"}`}>
+                {kasaModal.balance >= 0 ? "+" : ""}₺{kasaModal.balance.toFixed(2)}
+              </span>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Tutar (₺)</label>
+              <input
+                type="number"
+                value={kasaAmount}
+                onChange={(e) => setKasaAmount(e.target.value)}
+                placeholder="0.00"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                autoFocus
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Not (opsiyonel)</label>
+              <input
+                type="text"
+                value={kasaNotes}
+                onChange={(e) => setKasaNotes(e.target.value)}
+                placeholder="Kasa yüklemesi, nakit..."
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <div className="flex gap-3 pt-2">
+              <button
+                onClick={() => { setKasaModal(null); setKasaAmount(""); setKasaNotes(""); }}
+                className="flex-1 border border-gray-300 text-gray-700 py-2 rounded-lg hover:bg-gray-50"
+              >
+                İptal
+              </button>
+              <button
+                onClick={handleKasa}
+                disabled={saving || !kasaAmount}
+                className="flex-1 bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50"
+              >
+                {saving ? "Kaydediliyor..." : "Kaydet"}
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
 
       {payModal && (
         <Modal title={`Record Payment — ${payModal.name}`} onClose={() => { setPayModal(null); setPayAmount(""); setPayNotes(""); }}>

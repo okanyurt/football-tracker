@@ -4,18 +4,19 @@ import { prisma } from "@/lib/prisma";
 export async function GET() {
   const players = await prisma.player.findMany({
     include: {
-      matchPlayers: true,
+      matchPlayers: { include: { match: true } },
       payments: true,
     },
     orderBy: { name: "asc" },
   });
 
   const playersWithBalance = players.map((player) => {
-    const totalOwed = player.matchPlayers.reduce(
-      (sum, mp) => sum + mp.amountOwed,
-      0
-    );
-    const totalPaid = player.payments.reduce((sum, p) => sum + p.amount, 0);
+    const totalOwed = player.matchPlayers
+      .filter((mp) => !mp.match.cancelledAt)
+      .reduce((sum, mp) => sum + mp.amountOwed, 0);
+    const totalPaid = player.payments
+      .filter((p) => !p.cancelledAt)
+      .reduce((sum, p) => sum + p.amount, 0);
     return {
       id: player.id,
       name: player.name,
