@@ -4,6 +4,8 @@ import { useState, useEffect, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { format } from "date-fns";
+import { ArrowLeft, TrendingDown, TrendingUp, Shield, ArrowUpCircle, ArrowDownCircle } from "lucide-react";
+import Avatar from "@/components/Avatar";
 
 interface MatchPlayer {
   id: string;
@@ -45,22 +47,16 @@ export default function PlayerDetailPage() {
 
   const load = useCallback(async () => {
     const res = await fetch(`/api/players/${id}`);
-    if (!res.ok) {
-      router.push("/players");
-      return;
-    }
+    if (!res.ok) { router.push("/players"); return; }
     const data = await res.json();
     setPlayer(data);
     setLoading(false);
   }, [id, router]);
 
-  useEffect(() => {
-    load();
-  }, [load]);
+  useEffect(() => { load(); }, [load]);
 
   const handleCancelPayment = async (payment: Payment) => {
-    const isCancelled = !!payment.cancelledAt;
-    const msg = isCancelled ? "Bu ödemeyi geri al?" : "Bu ödemeyi iptal et?";
+    const msg = payment.cancelledAt ? "Bu ödemeyi geri al?" : "Bu ödemeyi iptal et?";
     if (!confirm(msg)) return;
     await fetch(`/api/payments/${payment.id}`, { method: "PATCH" });
     load();
@@ -70,7 +66,7 @@ export default function PlayerDetailPage() {
     if (!player) return;
     const kasaTotal = player.payments.filter((p) => p.isKasa).reduce((s, p) => s + p.amount, 0);
     if (kasaTotal <= 0) return;
-    if (!confirm(`${player.name} için kasadaki ₺${kasaTotal.toFixed(0)} mahsup edilsin mi? Geçmişte kayıt olarak görünecek.`)) return;
+    if (!confirm(`${player.name} için kasadaki ₺${kasaTotal.toFixed(0)} mahsup edilsin mi?`)) return;
     await fetch("/api/payments", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -82,216 +78,224 @@ export default function PlayerDetailPage() {
   if (loading || !player) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="text-gray-400 text-lg">Loading...</div>
+        <div className="text-slate-400">Yükleniyor...</div>
       </div>
     );
   }
 
+  const kasaEntries = player.payments
+    .filter((p) => p.isKasa)
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  const kasaTotal = kasaEntries.reduce((s, p) => s + p.amount, 0);
+
   return (
-    <div>
-      <div className="mb-6">
-        <Link href="/players" className="text-green-600 hover:underline text-sm">
-          ← Back to Players
+    <div className="space-y-6">
+      {/* Back + Header */}
+      <div>
+        <Link href="/players" className="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-700 transition-colors mb-4">
+          <ArrowLeft size={15} />
+          Players
         </Link>
-        <div className="flex items-center justify-between mt-2">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">{player.name}</h1>
-            {player.phone && <p className="text-gray-500 text-sm mt-0.5">{player.phone}</p>}
+        <div className="flex items-start justify-between">
+          <div className="flex items-center gap-4">
+            <Avatar name={player.name} size="lg" />
+            <div>
+              <h1 className="text-2xl font-bold text-slate-800">{player.name}</h1>
+              {player.phone && <p className="text-slate-400 text-sm mt-0.5">{player.phone}</p>}
+            </div>
           </div>
-          <div className="text-right">
-            <p className="text-sm text-gray-500">Balance</p>
-            <p
-              className={`text-2xl font-bold ${
-                player.balance < 0 ? "text-red-600" : "text-green-600"
-              }`}
-            >
-              ₺{player.balance.toFixed(2)}
+          <div
+            className={`px-4 py-2 rounded-2xl text-right ${
+              player.balance < 0 ? "bg-red-50" : player.balance > 0 ? "bg-emerald-50" : "bg-slate-100"
+            }`}
+          >
+            <p className="text-xs text-slate-400 mb-0.5">Bakiye</p>
+            <p className={`text-2xl font-bold ${player.balance < 0 ? "text-red-600" : player.balance > 0 ? "text-emerald-600" : "text-slate-400"}`}>
+              {player.balance < 0 ? "-" : player.balance > 0 ? "+" : ""}₺{Math.abs(player.balance).toFixed(0)}
             </p>
           </div>
         </div>
       </div>
 
-      <div className="grid sm:grid-cols-3 gap-4 mb-8">
-        <Stat label="Total Owed" value={`₺${player.totalOwed.toFixed(2)}`} color="red" />
-        <Stat label="Total Paid" value={`₺${player.totalPaid.toFixed(2)}`} color="green" />
-        <Stat label="Matches Played" value={String(player.matchPlayers.length)} color="blue" />
+      {/* Stat Cards */}
+      <div className="grid grid-cols-3 gap-4">
+        <div className="bg-gradient-to-br from-red-500 to-rose-600 rounded-2xl p-4 shadow-sm">
+          <div className="flex items-center gap-2 mb-2">
+            <TrendingDown size={15} className="text-red-200" />
+            <p className="text-xs font-semibold text-red-100 uppercase tracking-wider">Toplam Borç</p>
+          </div>
+          <p className="text-xl font-bold text-white">₺{player.totalOwed.toFixed(0)}</p>
+        </div>
+        <div className="bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-2xl p-4 shadow-sm">
+          <div className="flex items-center gap-2 mb-2">
+            <TrendingUp size={15} className="text-emerald-200" />
+            <p className="text-xs font-semibold text-emerald-100 uppercase tracking-wider">Toplam Ödeme</p>
+          </div>
+          <p className="text-xl font-bold text-white">₺{player.totalPaid.toFixed(0)}</p>
+        </div>
+        <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm">
+          <div className="flex items-center gap-2 mb-2">
+            <Shield size={15} className="text-slate-400" />
+            <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Maçlar</p>
+          </div>
+          <p className="text-xl font-bold text-slate-800">{player.matchPlayers.length}</p>
+        </div>
       </div>
 
-      {/* Kasa section */}
-      {(() => {
-        const kasaEntries = player.payments
-          .filter((p) => p.isKasa)
-          .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-        const kasaTotal = kasaEntries.reduce((s, p) => s + p.amount, 0);
-        return (
-          <div className="mb-6 bg-blue-50 border border-blue-200 rounded-xl p-4">
-            <div className="flex items-center justify-between mb-3">
-              <div>
-                <h2 className="text-base font-semibold text-blue-800">Kasa</h2>
-                <p className="text-xs text-blue-500 mt-0.5">Kasa geçmişi</p>
-              </div>
-              <div className="text-right">
-                <p className={`text-2xl font-bold ${kasaTotal > 0 ? "text-blue-700" : kasaTotal < 0 ? "text-red-600" : "text-gray-400"}`}>
-                  {kasaTotal > 0 ? "+" : ""}₺{kasaTotal.toFixed(0)}
-                </p>
-                {kasaTotal > 0 && (
-                  <button
-                    onClick={handleMahsup}
-                    className="mt-1 text-xs text-orange-500 hover:text-orange-700 underline"
-                  >
-                    Mahsup Et
-                  </button>
-                )}
-              </div>
-            </div>
-            {kasaEntries.length === 0 ? (
-              <p className="text-blue-400 text-sm">Kasa geçmişi yok.</p>
-            ) : (
-              <div className="space-y-2">
-                {kasaEntries.map((p) => {
-                  const isDeposit = p.amount > 0;
-                  return (
-                    <div key={p.id} className="bg-white border border-blue-100 rounded-lg px-3 py-2 flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <span className={`text-lg leading-none ${isDeposit ? "text-blue-400" : "text-orange-400"}`}>
-                          {isDeposit ? "↑" : "↓"}
-                        </span>
-                        <div>
-                          <p className="text-sm font-medium text-gray-800">{format(new Date(p.date), "d MMMM yyyy")}</p>
-                          {p.notes && <p className="text-xs text-gray-400 mt-0.5">{p.notes}</p>}
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className={`font-semibold text-sm ${isDeposit ? "text-blue-600" : "text-orange-500"}`}>
-                          {isDeposit ? "+" : ""}₺{p.amount.toFixed(0)}
-                        </span>
-                        <button
-                          onClick={() => handleCancelPayment(p)}
-                          className="text-xs border border-gray-200 text-gray-400 hover:border-red-200 hover:text-red-500 px-1.5 py-0.5 rounded transition-colors"
-                        >
-                          {p.cancelledAt ? "Geri Al" : "İptal"}
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
+      {/* Kasa Section */}
+      <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
+        <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+          <div>
+            <h2 className="text-sm font-semibold text-slate-700">Kasa</h2>
+            <p className="text-xs text-slate-400 mt-0.5">Kasa geçmişi</p>
+          </div>
+          <div className="text-right">
+            <p className={`text-xl font-bold ${kasaTotal > 0 ? "text-blue-600" : kasaTotal < 0 ? "text-red-600" : "text-slate-400"}`}>
+              {kasaTotal > 0 ? "+" : ""}₺{kasaTotal.toFixed(0)}
+            </p>
+            {kasaTotal > 0 && (
+              <button onClick={handleMahsup} className="text-xs text-orange-500 hover:text-orange-700 underline mt-0.5">
+                Mahsup Et
+              </button>
             )}
           </div>
-        );
-      })()}
-
-      <div className="grid sm:grid-cols-2 gap-6">
-        <div>
-          <h2 className="text-base font-semibold text-gray-900 mb-3">Match History</h2>
-          {player.matchPlayers.length === 0 ? (
-            <p className="text-gray-400 text-sm">No matches yet.</p>
+        </div>
+        <div className="p-5">
+          {kasaEntries.length === 0 ? (
+            <p className="text-slate-400 text-sm">Kasa geçmişi yok.</p>
           ) : (
             <div className="space-y-2">
-              {player.matchPlayers.map((mp) => {
-                const isCancelled = !!mp.match.cancelledAt;
+              {kasaEntries.map((p) => {
+                const isDeposit = p.amount > 0;
                 return (
-                  <div
-                    key={mp.id}
-                    className={`border rounded-lg px-4 py-3 flex items-center justify-between ${
-                      isCancelled ? "bg-gray-50 border-gray-100 opacity-60" : "bg-white border-gray-200"
-                    }`}
-                  >
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <Link
-                          href={`/matches/${mp.match.id}`}
-                          className={`text-sm font-medium ${isCancelled ? "line-through text-gray-400" : "text-gray-900 hover:text-green-700"}`}
-                        >
-                          {format(new Date(mp.match.date), "MMMM d, yyyy")}
-                        </Link>
-                        {isCancelled && (
-                          <span className="text-xs bg-red-100 text-red-400 px-1.5 py-0.5 rounded">İptal</span>
-                        )}
+                  <div key={p.id} className="flex items-center justify-between py-2.5 px-3 rounded-xl bg-slate-50 hover:bg-slate-100 transition-colors">
+                    <div className="flex items-center gap-3">
+                      {isDeposit
+                        ? <ArrowUpCircle size={18} className="text-blue-400 shrink-0" />
+                        : <ArrowDownCircle size={18} className="text-orange-400 shrink-0" />
+                      }
+                      <div>
+                        <p className="text-sm font-medium text-slate-700">{format(new Date(p.date), "d MMM yyyy")}</p>
+                        {p.notes && <p className="text-xs text-slate-400 mt-0.5">{p.notes}</p>}
                       </div>
-                      {mp.match.location && (
-                        <p className="text-xs text-gray-400 mt-0.5">{mp.match.location}</p>
-                      )}
                     </div>
-                    <span className={`font-semibold text-sm ${isCancelled ? "line-through text-gray-400" : "text-red-600"}`}>
-                      -₺{mp.amountOwed.toFixed(2)}
-                    </span>
+                    <div className="flex items-center gap-3">
+                      <span className={`font-semibold text-sm ${isDeposit ? "text-blue-600" : "text-orange-500"}`}>
+                        {isDeposit ? "+" : ""}₺{p.amount.toFixed(0)}
+                      </span>
+                      <button
+                        onClick={() => handleCancelPayment(p)}
+                        className={`text-xs border px-2 py-1 rounded-lg transition-colors ${
+                          p.cancelledAt
+                            ? "border-emerald-200 text-emerald-500 hover:bg-emerald-50"
+                            : "border-slate-200 text-slate-400 hover:border-red-200 hover:text-red-500"
+                        }`}
+                      >
+                        {p.cancelledAt ? "Geri Al" : "İptal"}
+                      </button>
+                    </div>
                   </div>
                 );
               })}
             </div>
           )}
         </div>
+      </div>
 
-        <div>
-          <h2 className="text-base font-semibold text-gray-900 mb-3">Payment History</h2>
-          {player.payments.filter((p) => !p.isKasa).length === 0 ? (
-            <p className="text-gray-400 text-sm">No payments yet.</p>
-          ) : (
-            <div className="space-y-2">
-              {player.payments.filter((p) => !p.isKasa).map((payment) => (
-                <div
-                  key={payment.id}
-                  className={`border rounded-lg px-4 py-3 flex items-center justify-between transition-colors ${
-                    payment.cancelledAt ? "bg-gray-50 border-gray-100 opacity-60" : "bg-white border-gray-200"
-                  }`}
-                >
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <p className={`text-sm font-medium ${payment.cancelledAt ? "line-through text-gray-400" : "text-gray-900"}`}>
-                        {format(new Date(payment.date), "MMMM d, yyyy")}
-                      </p>
-                      {payment.cancelledAt && (
-                        <span className="text-xs bg-red-100 text-red-400 px-1.5 py-0.5 rounded">İptal</span>
-                      )}
-                    </div>
-                    {payment.notes && (
-                      <p className="text-xs text-gray-400 mt-0.5">{payment.notes}</p>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className={`font-semibold text-sm ${payment.cancelledAt ? "line-through text-gray-400" : "text-green-600"}`}>
-                      +₺{payment.amount.toFixed(2)}
-                    </span>
-                    <button
-                      onClick={() => handleCancelPayment(payment)}
-                      className={`text-xs border px-1.5 py-0.5 rounded transition-colors ${
-                        payment.cancelledAt
-                          ? "border-green-200 text-green-500 hover:bg-green-50"
-                          : "border-gray-200 text-gray-400 hover:border-red-200 hover:text-red-500"
+      {/* History columns */}
+      <div className="grid sm:grid-cols-2 gap-5">
+        <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
+          <div className="px-5 py-4 border-b border-slate-100">
+            <h2 className="text-sm font-semibold text-slate-700">Maç Geçmişi</h2>
+          </div>
+          <div className="p-5">
+            {player.matchPlayers.length === 0 ? (
+              <p className="text-slate-400 text-sm">Henüz maç yok.</p>
+            ) : (
+              <div className="space-y-2">
+                {player.matchPlayers.map((mp) => {
+                  const isCancelled = !!mp.match.cancelledAt;
+                  return (
+                    <div
+                      key={mp.id}
+                      className={`flex items-center justify-between py-2.5 px-3 rounded-xl transition-colors ${
+                        isCancelled ? "opacity-50 bg-slate-50" : "bg-slate-50 hover:bg-slate-100"
                       }`}
                     >
-                      {payment.cancelledAt ? "Geri Al" : "İptal"}
-                    </button>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <Link
+                            href={`/matches/${mp.match.id}`}
+                            className={`text-sm font-medium ${isCancelled ? "line-through text-slate-400" : "text-slate-700 hover:text-emerald-600"}`}
+                          >
+                            {format(new Date(mp.match.date), "d MMM yyyy")}
+                          </Link>
+                          {isCancelled && (
+                            <span className="text-xs bg-red-100 text-red-400 px-1.5 py-0.5 rounded-md">İptal</span>
+                          )}
+                        </div>
+                        {mp.match.location && <p className="text-xs text-slate-400 mt-0.5">{mp.match.location}</p>}
+                      </div>
+                      <span className={`font-semibold text-sm ${isCancelled ? "line-through text-slate-400" : "text-red-500"}`}>
+                        -₺{mp.amountOwed.toFixed(0)}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
+          <div className="px-5 py-4 border-b border-slate-100">
+            <h2 className="text-sm font-semibold text-slate-700">Ödeme Geçmişi</h2>
+          </div>
+          <div className="p-5">
+            {player.payments.filter((p) => !p.isKasa).length === 0 ? (
+              <p className="text-slate-400 text-sm">Henüz ödeme yok.</p>
+            ) : (
+              <div className="space-y-2">
+                {player.payments.filter((p) => !p.isKasa).map((payment) => (
+                  <div
+                    key={payment.id}
+                    className={`flex items-center justify-between py-2.5 px-3 rounded-xl transition-colors ${
+                      payment.cancelledAt ? "opacity-50 bg-slate-50" : "bg-slate-50 hover:bg-slate-100"
+                    }`}
+                  >
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <p className={`text-sm font-medium ${payment.cancelledAt ? "line-through text-slate-400" : "text-slate-700"}`}>
+                          {format(new Date(payment.date), "d MMM yyyy")}
+                        </p>
+                        {payment.cancelledAt && (
+                          <span className="text-xs bg-red-100 text-red-400 px-1.5 py-0.5 rounded-md">İptal</span>
+                        )}
+                      </div>
+                      {payment.notes && <p className="text-xs text-slate-400 mt-0.5">{payment.notes}</p>}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className={`font-semibold text-sm ${payment.cancelledAt ? "line-through text-slate-400" : "text-emerald-600"}`}>
+                        +₺{payment.amount.toFixed(0)}
+                      </span>
+                      <button
+                        onClick={() => handleCancelPayment(payment)}
+                        className={`text-xs border px-2 py-1 rounded-lg transition-colors ${
+                          payment.cancelledAt
+                            ? "border-emerald-200 text-emerald-500 hover:bg-emerald-50"
+                            : "border-slate-200 text-slate-400 hover:border-red-200 hover:text-red-500"
+                        }`}
+                      >
+                        {payment.cancelledAt ? "Geri Al" : "İptal"}
+                      </button>
+                    </div>
                   </div>
-                </div>
-              ))}
-            </div>
-          )}
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       </div>
-    </div>
-  );
-}
-
-function Stat({
-  label,
-  value,
-  color,
-}: {
-  label: string;
-  value: string;
-  color: "red" | "green" | "blue";
-}) {
-  const colorMap = {
-    red: "bg-red-50 text-red-700",
-    green: "bg-green-50 text-green-700",
-    blue: "bg-blue-50 text-blue-700",
-  };
-  return (
-    <div className={`rounded-xl p-4 ${colorMap[color]}`}>
-      <p className="text-xs font-medium opacity-70 uppercase tracking-wider">{label}</p>
-      <p className="text-xl font-bold mt-1">{value}</p>
     </div>
   );
 }

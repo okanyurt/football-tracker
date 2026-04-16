@@ -16,7 +16,7 @@ export async function GET() {
 
 export async function POST(request: Request) {
   const body = await request.json();
-  const { date, location, totalCost, notes, playerIds, goalkeeperFree, goalkeeperPlayerIds, perPlayerAmount } = body;
+  const { date, location, totalCost, notes, playerIds, goalkeeperFree, goalkeeperPlayerIds, perPlayerAmount, team1Name, team2Name, playerTeams } = body;
 
   if (!date || !totalCost) {
     return NextResponse.json(
@@ -45,11 +45,14 @@ export async function POST(request: Request) {
       totalCost: Number(totalCost),
       notes: notes?.trim() || null,
       goalkeeperFree: !!goalkeeperFree,
+      team1Name: team1Name?.trim() || null,
+      team2Name: team2Name?.trim() || null,
       matchPlayers: {
         create: playerIds.map((playerId: string) => ({
           playerId,
           isGoalkeeper: freeIds.includes(playerId),
           amountOwed: freeIds.includes(playerId) ? 0 : amountPerPlayer,
+          team: playerTeams?.[playerId] ?? null,
         })),
       },
     },

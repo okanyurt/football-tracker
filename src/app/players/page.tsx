@@ -2,7 +2,9 @@
 
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
-import Modal from "@/components/Modal";
+import Drawer from "@/components/Drawer";
+import Avatar from "@/components/Avatar";
+import { UserPlus, Pencil, Trash2 } from "lucide-react";
 
 interface Player {
   id: string;
@@ -49,7 +51,6 @@ export default function PlayersPage() {
   const handleSave = async () => {
     if (!name.trim()) return;
     setSaving(true);
-
     if (editPlayer) {
       await fetch(`/api/players/${editPlayer.id}`, {
         method: "PUT",
@@ -65,13 +66,12 @@ export default function PlayersPage() {
       });
       setShowAdd(false);
     }
-
     setSaving(false);
     load();
   };
 
   const handleDelete = async (id: string, playerName: string) => {
-    if (!confirm(`Delete "${playerName}"? All their history will be removed.`)) return;
+    if (!confirm(`"${playerName}" silinsin mi? Tüm geçmişi de silinecek.`)) return;
     await fetch(`/api/players/${id}`, { method: "DELETE" });
     load();
   };
@@ -79,85 +79,98 @@ export default function PlayersPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="text-gray-400 text-lg">Loading...</div>
+        <div className="text-slate-400">Yükleniyor...</div>
       </div>
     );
   }
 
   return (
-    <div>
-      <div className="flex items-center justify-between mb-6">
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Players</h1>
-          <p className="text-gray-500 mt-1">{players.length} players registered</p>
+          <h1 className="text-2xl font-bold text-slate-800">Players</h1>
+          <p className="text-slate-500 text-sm mt-0.5">{players.length} kayıtlı oyuncu</p>
         </div>
         <button
           onClick={openAdd}
-          className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-medium text-sm transition-colors"
+          className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl font-medium text-sm transition-colors shadow-sm"
         >
-          + Add Player
+          <UserPlus size={15} />
+          Oyuncu Ekle
         </button>
       </div>
 
       {players.length === 0 ? (
-        <div className="bg-white rounded-xl border border-dashed border-gray-300 p-12 text-center">
+        <div className="bg-white rounded-2xl border border-dashed border-slate-300 p-12 text-center">
           <div className="text-4xl mb-3">👤</div>
-          <p className="text-gray-500">No players yet.</p>
-          <button
-            onClick={openAdd}
-            className="mt-4 text-green-600 hover:underline text-sm"
-          >
-            Add the first player
+          <p className="text-slate-500 font-medium">Henüz oyuncu yok.</p>
+          <button onClick={openAdd} className="mt-3 text-emerald-600 hover:underline text-sm">
+            İlk oyuncuyu ekle
           </button>
         </div>
       ) : (
-        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+        <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
+          <div className="px-5 py-4 border-b border-slate-100">
+            <h2 className="text-sm font-semibold text-slate-700">Tüm Oyuncular</h2>
+          </div>
           <table className="w-full">
-            <thead className="bg-gray-50 border-b border-gray-200">
+            <thead className="bg-slate-50 border-b border-slate-100">
               <tr>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Name</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Phone</th>
-                <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Balance</th>
-                <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Actions</th>
+                <th className="text-left px-5 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">İsim</th>
+                <th className="text-left px-5 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider hidden sm:table-cell">Telefon</th>
+                <th className="text-right px-5 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">Bakiye</th>
+                <th className="px-5 py-3" />
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
+            <tbody className="divide-y divide-slate-100">
               {players.map((player) => (
-                <tr key={player.id} className="hover:bg-gray-50">
-                  <td className="px-4 py-3">
-                    <Link
-                      href={`/players/${player.id}`}
-                      className="font-medium text-gray-900 hover:text-green-700"
-                    >
-                      {player.name}
-                    </Link>
-                    <span className="ml-1.5 text-xs text-gray-400">{player.matchCount}m</span>
+                <tr key={player.id} className="hover:bg-slate-50 transition-colors">
+                  <td className="px-5 py-3.5">
+                    <div className="flex items-center gap-3">
+                      <div className="relative">
+                        <Avatar name={player.name} size="sm" />
+                        <span className="absolute -top-1.5 -right-1.5 min-w-[16px] h-4 px-0.5 bg-slate-700 text-white text-[10px] font-bold rounded-full flex items-center justify-center leading-none">
+                          {player.matchCount}
+                        </span>
+                      </div>
+                      <Link href={`/players/${player.id}`} className="font-medium text-slate-800 hover:text-emerald-600 transition-colors">
+                        {player.name}
+                      </Link>
+                    </div>
                   </td>
-                  <td className="px-4 py-3 text-gray-500 text-sm">
+                  <td className="px-5 py-3.5 text-slate-400 text-sm hidden sm:table-cell">
                     {player.phone || "—"}
                   </td>
-                  <td className="px-4 py-3 text-right">
+                  <td className="px-5 py-3.5 text-right">
                     <span
-                      className={`font-semibold ${
-                        player.balance < 0 ? "text-red-600" : "text-green-600"
+                      className={`inline-block font-bold text-sm px-2.5 py-1 rounded-full ${
+                        player.balance < 0
+                          ? "bg-red-50 text-red-600"
+                          : player.balance > 0
+                          ? "bg-emerald-50 text-emerald-600"
+                          : "text-slate-400"
                       }`}
                     >
-                      ₺{player.balance.toFixed(2)}
+                      {player.balance < 0 ? "-" : player.balance > 0 ? "+" : ""}₺{Math.abs(player.balance).toFixed(0)}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-right">
-                    <button
-                      onClick={() => openEdit(player)}
-                      className="text-gray-400 hover:text-gray-700 text-sm px-2 py-1 rounded"
-                    >
-                      Edit
-                    </button>
-                    <button
-                      onClick={() => handleDelete(player.id, player.name)}
-                      className="text-red-400 hover:text-red-600 text-sm px-2 py-1 rounded ml-1"
-                    >
-                      Delete
-                    </button>
+                  <td className="px-5 py-3.5 text-right">
+                    <div className="flex gap-1 justify-end">
+                      <button
+                        onClick={() => openEdit(player)}
+                        className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
+                        title="Düzenle"
+                      >
+                        <Pencil size={14} />
+                      </button>
+                      <button
+                        onClick={() => handleDelete(player.id, player.name)}
+                        className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                        title="Sil"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -167,60 +180,54 @@ export default function PlayersPage() {
       )}
 
       {(showAdd || editPlayer) && (
-        <Modal
-          title={editPlayer ? "Edit Player" : "New Player"}
-          onClose={() => {
-            setShowAdd(false);
-            setEditPlayer(null);
-          }}
+        <Drawer
+          title={editPlayer ? "Oyuncuyu Düzenle" : "Yeni Oyuncu"}
+          onClose={() => { setShowAdd(false); setEditPlayer(null); }}
         >
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Name <span className="text-red-500">*</span>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                İsim <span className="text-red-500">*</span>
               </label>
               <input
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="Full name"
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500"
+                placeholder="Ad soyad"
+                className="w-full border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-slate-800"
                 autoFocus
                 onKeyDown={(e) => e.key === "Enter" && handleSave()}
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Phone (optional)
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                Telefon (opsiyonel)
               </label>
               <input
                 type="tel"
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
                 placeholder="+90 5XX XXX XX XX"
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500"
+                className="w-full border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-slate-800"
               />
             </div>
-            <div className="flex gap-3 pt-2">
+            <div className="flex gap-3 pt-1">
               <button
-                onClick={() => {
-                  setShowAdd(false);
-                  setEditPlayer(null);
-                }}
-                className="flex-1 border border-gray-300 text-gray-700 py-2 rounded-lg hover:bg-gray-50"
+                onClick={() => { setShowAdd(false); setEditPlayer(null); }}
+                className="flex-1 border border-slate-200 text-slate-600 py-2.5 rounded-xl hover:bg-slate-50 text-sm font-medium"
               >
-                Cancel
+                İptal
               </button>
               <button
                 onClick={handleSave}
                 disabled={saving || !name.trim()}
-                className="flex-1 bg-green-600 text-white py-2 rounded-lg hover:bg-green-700 disabled:opacity-50"
+                className="flex-1 bg-emerald-600 text-white py-2.5 rounded-xl hover:bg-emerald-700 disabled:opacity-50 text-sm font-medium"
               >
-                {saving ? "Saving..." : editPlayer ? "Update" : "Add"}
+                {saving ? "Kaydediliyor..." : editPlayer ? "Güncelle" : "Ekle"}
               </button>
             </div>
           </div>
-        </Modal>
+        </Drawer>
       )}
     </div>
   );

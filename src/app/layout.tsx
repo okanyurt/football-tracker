@@ -1,22 +1,25 @@
 import type { Metadata } from "next";
+import { Inter } from "next/font/google";
 import "./globals.css";
-import Navbar from "@/components/Navbar";
+import Sidebar from "@/components/Sidebar";
+
+const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
   title: "Football Tracker",
   description: "Track football match expenses and player balances",
 };
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body className="min-h-screen bg-slate-50">
-        <Navbar />
-        <main className="max-w-5xl mx-auto px-4 py-8">{children}</main>
+      <body className={`${inter.className} bg-slate-100 min-h-screen`}>
+        <Sidebar />
+        <main className="md:ml-60 min-h-screen">
+          <div className="px-6 py-7 pb-24 md:pb-8 max-w-5xl mx-auto">
+            {children}
+          </div>
+        </main>
       </body>
     </html>
   );
