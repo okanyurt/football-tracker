@@ -16,7 +16,7 @@ export async function GET() {
 
 export async function POST(request: Request) {
   const body = await request.json();
-  const { date, location, totalCost, notes, playerIds } = body;
+  const { date, location, totalCost, notes, playerIds, goalkeeperFree, goalkeeperPlayerIds, perPlayerAmount } = body;
 
   if (!date || !totalCost) {
     return NextResponse.json(
@@ -32,7 +32,11 @@ export async function POST(request: Request) {
     );
   }
 
-  const amountPerPlayer = totalCost / playerIds.length;
+  const freeIds: string[] = goalkeeperFree && goalkeeperPlayerIds?.length ? goalkeeperPlayerIds : [];
+  const payingCount = playerIds.filter((id: string) => !freeIds.includes(id)).length;
+  const amountPerPlayer = perPlayerAmount != null
+    ? Number(perPlayerAmount)
+    : payingCount > 0 ? Number(totalCost) / payingCount : 0;
 
   const match = await prisma.match.create({
     data: {
@@ -40,10 +44,12 @@ export async function POST(request: Request) {
       location: location?.trim() || null,
       totalCost: Number(totalCost),
       notes: notes?.trim() || null,
+      goalkeeperFree: !!goalkeeperFree,
       matchPlayers: {
         create: playerIds.map((playerId: string) => ({
           playerId,
-          amountOwed: amountPerPlayer,
+          isGoalkeeper: freeIds.includes(playerId),
+          amountOwed: freeIds.includes(playerId) ? 0 : amountPerPlayer,
         })),
       },
     },

@@ -11,6 +11,7 @@ interface Player {
   balance: number;
   totalOwed: number;
   totalPaid: number;
+  matchCount: number;
 }
 
 export default function PlayersPage() {
@@ -130,6 +131,7 @@ export default function PlayersPage() {
                     >
                       {player.name}
                     </Link>
+                    <span className="ml-1.5 text-xs text-gray-400">{player.matchCount}m</span>
                   </td>
                   <td className="px-4 py-3 text-gray-500 text-sm">
                     {player.phone || "—"}

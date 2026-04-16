@@ -11,9 +11,8 @@ export async function GET() {
   });
 
   const playersWithBalance = players.map((player) => {
-    const totalOwed = player.matchPlayers
-      .filter((mp) => !mp.match.cancelledAt)
-      .reduce((sum, mp) => sum + mp.amountOwed, 0);
+    const activeMatches = player.matchPlayers.filter((mp) => !mp.match.cancelledAt);
+    const totalOwed = activeMatches.reduce((sum, mp) => sum + mp.amountOwed, 0);
     const totalPaid = player.payments
       .filter((p) => !p.cancelledAt)
       .reduce((sum, p) => sum + p.amount, 0);
@@ -25,6 +24,7 @@ export async function GET() {
       balance: totalPaid - totalOwed,
       totalOwed,
       totalPaid,
+      matchCount: activeMatches.length,
     };
   });
 

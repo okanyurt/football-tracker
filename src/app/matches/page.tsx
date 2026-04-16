@@ -17,7 +17,8 @@ interface Match {
   totalCost: number;
   notes: string | null;
   cancelledAt: string | null;
-  matchPlayers: { player: Player }[];
+  goalkeeperFree: boolean;
+  matchPlayers: { isGoalkeeper: boolean; player: Player }[];
 }
 
 export default function MatchesPage() {
@@ -28,9 +29,12 @@ export default function MatchesPage() {
 
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
   const [location, setLocation] = useState("");
+  const [costMode, setCostMode] = useState<"total" | "perPlayer">("total");
   const [totalCost, setTotalCost] = useState("");
   const [notes, setNotes] = useState("");
   const [selectedPlayerIds, setSelectedPlayerIds] = useState<string[]>([]);
+  const [goalkeeperFree, setGoalkeeperFree] = useState(false);
+  const [goalkeeperPlayerIds, setGoalkeeperPlayerIds] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
 
   const load = useCallback(async () => {
@@ -50,14 +54,25 @@ export default function MatchesPage() {
   const openCreate = () => {
     setDate(new Date().toISOString().split("T")[0]);
     setLocation("");
+    setCostMode("total");
     setTotalCost("");
     setNotes("");
     setSelectedPlayerIds([]);
+    setGoalkeeperFree(false);
+    setGoalkeeperPlayerIds([]);
     setShowCreate(true);
   };
 
   const togglePlayer = (id: string) => {
-    setSelectedPlayerIds((prev) =>
+    setSelectedPlayerIds((prev) => {
+      const next = prev.includes(id) ? prev.filter((p) => p !== id) : [...prev, id];
+      setGoalkeeperPlayerIds((gk) => gk.filter((gkId) => next.includes(gkId)));
+      return next;
+    });
+  };
+
+  const toggleGoalkeeper = (id: string) => {
+    setGoalkeeperPlayerIds((prev) =>
       prev.includes(id) ? prev.filter((p) => p !== id) : [...prev, id]
     );
   };
@@ -71,9 +86,12 @@ export default function MatchesPage() {
       body: JSON.stringify({
         date,
         location,
-        totalCost: Number(totalCost),
+        totalCost: computedTotal,
         notes,
         playerIds: selectedPlayerIds,
+        goalkeeperFree,
+        goalkeeperPlayerIds: goalkeeperFree ? goalkeeperPlayerIds : [],
+        ...(costMode === "perPlayer" && { perPlayerAmount: Number(totalCost) }),
       }),
     });
     setShowCreate(false);
@@ -91,10 +109,19 @@ export default function MatchesPage() {
     load();
   };
 
-  const perPlayer =
-    selectedPlayerIds.length > 0 && totalCost
-      ? (Number(totalCost) / selectedPlayerIds.length).toFixed(2)
-      : null;
+  const payingCount = goalkeeperFree && goalkeeperPlayerIds.length
+    ? selectedPlayerIds.filter((id) => !goalkeeperPlayerIds.includes(id)).length
+    : selectedPlayerIds.length;
+
+  const computedTotal = costMode === "perPlayer" && totalCost && payingCount > 0
+    ? Number(totalCost) * payingCount
+    : Number(totalCost);
+
+  const perPlayer = payingCount > 0 && totalCost
+    ? costMode === "perPlayer"
+      ? Number(totalCost).toFixed(2)
+      : (Number(totalCost) / payingCount).toFixed(2)
+    : null;
 
   if (loading) {
     return (
@@ -163,7 +190,12 @@ export default function MatchesPage() {
                     )}
                   </div>
                   <p className="text-sm text-gray-400 mt-0.5">
-                    {match.matchPlayers.length} oyuncu · ₺{match.totalCost.toFixed(2)}
+                    {match.matchPlayers.length} players · ₺{match.totalCost.toFixed(2)}
+                    {match.goalkeeperFree && (
+                      <span className="ml-1 text-xs bg-yellow-100 text-yellow-700 px-1.5 py-0.5 rounded font-medium">
+                        GK free
+                      </span>
+                    )}
                   </p>
                   <p className="text-xs text-gray-300 mt-0.5">
                     {match.matchPlayers.map((mp) => mp.player.name).join(", ")}
@@ -175,7 +207,12 @@ export default function MatchesPage() {
                   <div className="text-right">
                     <p className="text-sm text-gray-500">Kişi başı</p>
                     <p className="font-bold text-gray-900">
-                      ₺{(match.totalCost / Math.max(match.matchPlayers.length, 1)).toFixed(2)}
+                      ₺{(() => {
+                          const payingCount = match.goalkeeperFree
+                            ? match.matchPlayers.filter((mp) => !mp.isGoalkeeper).length
+                            : match.matchPlayers.length;
+                          return payingCount > 0 ? (match.totalCost / payingCount).toFixed(2) : "0.00";
+                        })()}
                     </p>
                   </div>
                 )}
@@ -211,14 +248,32 @@ export default function MatchesPage() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Total Cost (₺) <span className="text-red-500">*</span>
-                </label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-sm font-medium text-gray-700">
+                    {costMode === "total" ? "Total Cost (₺)" : "Per Player (₺)"} <span className="text-red-500">*</span>
+                  </label>
+                  <div className="flex text-xs border border-gray-200 rounded-md overflow-hidden">
+                    <button
+                      type="button"
+                      onClick={() => setCostMode("total")}
+                      className={`px-2 py-0.5 ${costMode === "total" ? "bg-green-600 text-white" : "text-gray-500 hover:bg-gray-50"}`}
+                    >
+                      Total
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setCostMode("perPlayer")}
+                      className={`px-2 py-0.5 ${costMode === "perPlayer" ? "bg-green-600 text-white" : "text-gray-500 hover:bg-gray-50"}`}
+                    >
+                      Kişi başı
+                    </button>
+                  </div>
+                </div>
                 <input
                   type="number"
                   value={totalCost}
                   onChange={(e) => setTotalCost(e.target.value)}
-                  placeholder="600"
+                  placeholder={costMode === "total" ? "600" : "50"}
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500"
                 />
               </div>
@@ -263,8 +318,50 @@ export default function MatchesPage() {
               )}
               {perPlayer && (
                 <p className="text-xs text-green-700 mt-1.5 font-medium">
-                  Per player: ₺{perPlayer} ({selectedPlayerIds.length} players)
+                  {costMode === "perPlayer"
+                    ? `Total: ₺${computedTotal.toFixed(2)} · ₺${perPlayer}/kişi`
+                    : `₺${perPlayer}/kişi`}
+                  {" "}({payingCount} paying{goalkeeperFree && goalkeeperPlayerIds.length > 0 ? `, ${goalkeeperPlayerIds.length} GK free` : ""})
                 </p>
+              )}
+            </div>
+
+            <div className="border border-gray-200 rounded-lg p-3 space-y-2">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={goalkeeperFree}
+                  onChange={(e) => {
+                    setGoalkeeperFree(e.target.checked);
+                    if (!e.target.checked) setGoalkeeperPlayerId("");
+                  }}
+                  className="accent-green-600"
+                />
+                <span className="text-sm font-medium text-gray-700">Goalkeeper plays for free</span>
+              </label>
+              {goalkeeperFree && (
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Select goalkeeper(s)</label>
+                  {selectedPlayerIds.length === 0 ? (
+                    <p className="text-xs text-gray-400">Select players first.</p>
+                  ) : (
+                    <div className="border border-gray-200 rounded-lg divide-y divide-gray-100">
+                      {players
+                        .filter((p) => selectedPlayerIds.includes(p.id))
+                        .map((p) => (
+                          <label key={p.id} className="flex items-center gap-2 px-3 py-2 cursor-pointer hover:bg-gray-50">
+                            <input
+                              type="checkbox"
+                              checked={goalkeeperPlayerIds.includes(p.id)}
+                              onChange={() => toggleGoalkeeper(p.id)}
+                              className="accent-yellow-500"
+                            />
+                            <span className="text-sm text-gray-800">{p.name}</span>
+                          </label>
+                        ))}
+                    </div>
+                  )}
+                </div>
               )}
             </div>
 
