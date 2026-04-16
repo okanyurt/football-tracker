@@ -1,6 +1,6 @@
-# ⚽ Footbal Tracker
+# ⚽ Football Tracker
 
-A web application to manage footbal match expenses and track balances per player within a group of friends.
+A web application to manage football match expenses and track balances per player within a group of friends.
 
 ## What It Does
 
