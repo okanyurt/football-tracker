@@ -18,6 +18,7 @@ interface MatchPlayer {
   id: string;
   playerId: string;
   amountOwed: number;
+  isGoalkeeper: boolean;
   team: number | null;
   player: Player;
 }
@@ -220,10 +221,11 @@ export default function MatchDetailPage() {
                 <div className="p-3 space-y-1.5">
                   {team1Players.length === 0 ? (
                     <p className="text-xs text-slate-400 px-1">Oyuncu yok</p>
-                  ) : team1Players.map((mp) => (
+                  ) : [...team1Players].sort((a, b) => Number(b.isGoalkeeper) - Number(a.isGoalkeeper)).map((mp) => (
                     <div key={mp.id} className="flex items-center gap-2.5 px-2 py-1.5 rounded-lg bg-white border border-blue-100">
                       <Avatar name={mp.player.name} size="sm" />
                       <span className="text-sm font-medium text-slate-700 flex-1">{mp.player.name}</span>
+                      {mp.isGoalkeeper && <span className="text-[10px] font-bold bg-yellow-100 text-yellow-700 border border-yellow-200 px-1.5 py-0.5 rounded-md">GK</span>}
                       <span className="text-xs text-red-500 font-semibold">₺{mp.amountOwed.toFixed(0)}</span>
                     </div>
                   ))}
@@ -239,10 +241,11 @@ export default function MatchDetailPage() {
                 <div className="p-3 space-y-1.5">
                   {team2Players.length === 0 ? (
                     <p className="text-xs text-slate-400 px-1">Oyuncu yok</p>
-                  ) : team2Players.map((mp) => (
+                  ) : [...team2Players].sort((a, b) => Number(b.isGoalkeeper) - Number(a.isGoalkeeper)).map((mp) => (
                     <div key={mp.id} className="flex items-center gap-2.5 px-2 py-1.5 rounded-lg bg-white border border-orange-100">
                       <Avatar name={mp.player.name} size="sm" />
                       <span className="text-sm font-medium text-slate-700 flex-1">{mp.player.name}</span>
+                      {mp.isGoalkeeper && <span className="text-[10px] font-bold bg-yellow-100 text-yellow-700 border border-yellow-200 px-1.5 py-0.5 rounded-md">GK</span>}
                       <span className="text-xs text-red-500 font-semibold">₺{mp.amountOwed.toFixed(0)}</span>
                     </div>
                   ))}
@@ -253,13 +256,14 @@ export default function MatchDetailPage() {
               {unassigned.length > 0 && (
                 <div className="sm:col-span-2 rounded-xl border border-slate-200 bg-slate-50/50 overflow-hidden">
                   <div className="px-4 py-2.5 border-b border-slate-200">
-                    <p className="text-sm font-semibold text-slate-500">Atamasız</p>
+                    <p className="text-sm font-semibold text-slate-500">Unassigned</p>
                   </div>
                   <div className="p-3 flex flex-wrap gap-2">
-                    {unassigned.map((mp) => (
+                    {[...unassigned].sort((a, b) => Number(b.isGoalkeeper) - Number(a.isGoalkeeper)).map((mp) => (
                       <div key={mp.id} className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-white border border-slate-200">
                         <Avatar name={mp.player.name} size="sm" />
                         <span className="text-sm text-slate-600">{mp.player.name}</span>
+                        {mp.isGoalkeeper && <span className="text-[10px] font-bold bg-yellow-100 text-yellow-700 border border-yellow-200 px-1.5 py-0.5 rounded-md">GK</span>}
                       </div>
                     ))}
                   </div>
@@ -357,7 +361,7 @@ export default function MatchDetailPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {match.matchPlayers.map((mp) => (
+              {[...match.matchPlayers].sort((a, b) => Number(b.isGoalkeeper) - Number(a.isGoalkeeper)).map((mp) => (
                 <tr key={mp.id} className="hover:bg-slate-50 transition-colors">
                   <td className="px-5 py-3.5">
                     <div className="flex items-center gap-3">
@@ -366,6 +370,7 @@ export default function MatchDetailPage() {
                         <Link href={`/players/${mp.player.id}`} className="font-medium text-slate-800 hover:text-emerald-600 transition-colors">
                           {mp.player.name}
                         </Link>
+                        {mp.isGoalkeeper && <span className="text-[10px] font-bold bg-yellow-100 text-yellow-700 border border-yellow-200 px-1.5 py-0.5 rounded-md">GK</span>}
                         {mp.team === 1 && <span className="text-xs font-semibold bg-blue-100 text-blue-600 px-2 py-0.5 rounded-full">{t1Name}</span>}
                         {mp.team === 2 && <span className="text-xs font-semibold bg-orange-100 text-orange-600 px-2 py-0.5 rounded-full">{t2Name}</span>}
                       </div>
