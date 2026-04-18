@@ -16,6 +16,10 @@ import { LoginSchema, parseBody } from "@/lib/schemas";
 const MAX_FAILED_ATTEMPTS = 5;
 const LOCKOUT_DURATION_MS = 15 * 60 * 1000; // 15 minutes
 
+// Pre-computed bcrypt hash used when the username doesn't exist.
+// Ensures bcrypt always runs → prevents timing-based username enumeration.
+const DUMMY_HASH = "$2b$12$dummyhashfortimingprotection000000000000000000000000u";
+
 function getClientIp(req: NextRequest): string {
   const forwarded = req.headers.get("x-forwarded-for");
   if (forwarded) return forwarded.split(",")[0].trim();
@@ -70,7 +74,9 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const passwordValid = user ? await bcrypt.compare(password, user.password) : false;
+    // Always run bcrypt regardless of whether the user exists.
+    // This prevents timing attacks that reveal valid usernames via response time differences.
+    const passwordValid = await bcrypt.compare(password, user?.password ?? DUMMY_HASH);
 
     if (!user || !passwordValid) {
       // Increment failed attempts in DB
