@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { CreateMatchSchema, parseBody } from "@/lib/schemas";
+import { roundCents } from "@/lib/money";
 
 export async function GET() {
   const matches = await prisma.match.findMany({
@@ -44,7 +45,7 @@ export async function POST(request: Request) {
     perPlayerAmount != null
       ? perPlayerAmount
       : payingCount > 0
-      ? totalCost / payingCount
+      ? roundCents(totalCost / payingCount)
       : 0;
 
   try {

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { AddParticipantsSchema, RemoveParticipantSchema, parseBody } from "@/lib/schemas";
+import { roundCents } from "@/lib/money";
 
 export async function POST(
   request: Request,
@@ -33,7 +34,7 @@ export async function POST(
       return NextResponse.json({ error: "No players to add" }, { status: 400 });
     }
 
-    const amountPerPlayer = match.totalCost / totalPlayers;
+    const amountPerPlayer = roundCents(match.totalCost / totalPlayers);
 
     await prisma.$transaction([
       ...match.matchPlayers.map((mp) =>
@@ -88,7 +89,7 @@ export async function DELETE(
 
     const remaining = match.matchPlayers.filter((mp) => mp.playerId !== playerId);
     if (remaining.length > 0) {
-      const amountPerPlayer = match.totalCost / remaining.length;
+      const amountPerPlayer = roundCents(match.totalCost / remaining.length);
       await prisma.$transaction(
         remaining.map((mp) =>
           prisma.matchPlayer.update({
