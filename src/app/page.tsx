@@ -5,6 +5,7 @@ import Link from "next/link";
 import Modal from "@/components/Modal";
 import { TrendingDown, Wallet, Users } from "lucide-react";
 import Avatar from "@/components/Avatar";
+import { useToast } from "@/hooks/useToast";
 
 interface Player {
   id: string;
@@ -26,13 +27,14 @@ export default function DashboardPage() {
   const [kasaAmount, setKasaAmount] = useState("");
   const [kasaNotes, setKasaNotes] = useState("");
   const [saving, setSaving] = useState(false);
+  const { showError, ToastEl } = useToast();
 
   const load = useCallback(async () => {
     const res = await fetch("/api/players");
-    const data = await res.json();
-    setPlayers(data);
+    if (!res.ok) { showError("Oyuncular yüklenemedi"); setLoading(false); return; }
+    setPlayers(await res.json());
     setLoading(false);
-  }, []);
+  }, [showError]);
 
   useEffect(() => {
     load();
@@ -41,30 +43,32 @@ export default function DashboardPage() {
   const handlePayment = async () => {
     if (!payModal || !payAmount) return;
     setSaving(true);
-    await fetch("/api/payments", {
+    const res = await fetch("/api/payments", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ playerId: payModal.id, amount: payAmount, notes: payNotes }),
     });
+    setSaving(false);
+    if (!res.ok) { const d = await res.json().catch(() => ({})); showError(d.error || "Ödeme kaydedilemedi"); return; }
     setPayModal(null);
     setPayAmount("");
     setPayNotes("");
-    setSaving(false);
     load();
   };
 
   const handleKasa = async () => {
     if (!kasaModal || !kasaAmount) return;
     setSaving(true);
-    await fetch("/api/payments", {
+    const res = await fetch("/api/payments", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ playerId: kasaModal.id, amount: kasaAmount, notes: kasaNotes || "Kasa yüklemesi", isKasa: true }),
     });
+    setSaving(false);
+    if (!res.ok) { const d = await res.json().catch(() => ({})); showError(d.error || "Kasa kaydedilemedi"); return; }
     setKasaModal(null);
     setKasaAmount("");
     setKasaNotes("");
-    setSaving(false);
     load();
   };
 
@@ -87,6 +91,7 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6">
+      {ToastEl}
       {/* Page header */}
       <div>
         <h1 className="text-2xl font-bold text-slate-800">Dashboard</h1>

@@ -6,6 +6,7 @@ import Link from "next/link";
 import Modal from "@/components/Modal";
 import { format } from "date-fns";
 import { ArrowLeft, CircleDollarSign, Users, UserPlus2, X, Pencil, Check } from "lucide-react";
+import { useToast } from "@/hooks/useToast";
 import { cycleTeam } from "@/utils/teams";
 import Avatar from "@/components/Avatar";
 
@@ -43,6 +44,7 @@ export default function MatchDetailPage() {
   const [showAddPlayers, setShowAddPlayers] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
+  const { showError, ToastEl } = useToast();
 
   // Team editing state
   const [editingTeams, setEditingTeams] = useState(false);
@@ -88,7 +90,7 @@ export default function MatchDetailPage() {
 
   const saveTeams = async () => {
     setSaving(true);
-    await fetch(`/api/matches/${id}/teams`, {
+    const res = await fetch(`/api/matches/${id}/teams`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -98,6 +100,7 @@ export default function MatchDetailPage() {
       }),
     });
     setSaving(false);
+    if (!res.ok) { const d = await res.json().catch(() => ({})); showError(d.error || "Takımlar kaydedilemedi"); return; }
     setEditingTeams(false);
     loadMatch();
   };
@@ -112,23 +115,25 @@ export default function MatchDetailPage() {
   const handleAddPlayers = async () => {
     if (selectedIds.length === 0) return;
     setSaving(true);
-    await fetch(`/api/matches/${id}/participants`, {
+    const res = await fetch(`/api/matches/${id}/participants`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ playerIds: selectedIds }),
     });
-    setShowAddPlayers(false);
     setSaving(false);
+    if (!res.ok) { const d = await res.json().catch(() => ({})); showError(d.error || "Oyuncu eklenemedi"); return; }
+    setShowAddPlayers(false);
     loadMatch();
   };
 
   const handleRemovePlayer = async (playerId: string, playerName: string) => {
     if (!confirm(`"${playerName}" bu maçtan çıkarılsın mı?`)) return;
-    await fetch(`/api/matches/${id}/participants`, {
+    const res = await fetch(`/api/matches/${id}/participants`, {
       method: "DELETE",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ playerId }),
     });
+    if (!res.ok) { const d = await res.json().catch(() => ({})); showError(d.error || "Oyuncu çıkarılamadı"); return; }
     loadMatch();
   };
 
@@ -152,6 +157,7 @@ export default function MatchDetailPage() {
 
   return (
     <div className="space-y-6">
+      {ToastEl}
       {/* Back + Header */}
       <div>
         <Link href="/matches" className="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-700 transition-colors mb-4">

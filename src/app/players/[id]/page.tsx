@@ -6,6 +6,7 @@ import Link from "next/link";
 import { format } from "date-fns";
 import { ArrowLeft, TrendingDown, TrendingUp, Shield, ArrowUpCircle, ArrowDownCircle } from "lucide-react";
 import Avatar from "@/components/Avatar";
+import { useToast } from "@/hooks/useToast";
 
 interface MatchPlayer {
   id: string;
@@ -35,6 +36,7 @@ interface PlayerDetail {
   balance: number;
   totalOwed: number;
   totalPaid: number;
+  matchCount: number;
   matchPlayers: MatchPlayer[];
   payments: Payment[];
 }
@@ -44,6 +46,7 @@ export default function PlayerDetailPage() {
   const router = useRouter();
   const [player, setPlayer] = useState<PlayerDetail | null>(null);
   const [loading, setLoading] = useState(true);
+  const { showError, ToastEl } = useToast();
 
   const load = useCallback(async () => {
     const res = await fetch(`/api/players/${id}`);
@@ -58,7 +61,8 @@ export default function PlayerDetailPage() {
   const handleCancelPayment = async (payment: Payment) => {
     const msg = payment.cancelledAt ? "Bu ödemeyi geri al?" : "Bu ödemeyi iptal et?";
     if (!confirm(msg)) return;
-    await fetch(`/api/payments/${payment.id}`, { method: "PATCH" });
+    const res = await fetch(`/api/payments/${payment.id}`, { method: "PATCH" });
+    if (!res.ok) { const d = await res.json().catch(() => ({})); showError(d.error || "Ödeme güncellenemedi"); return; }
     load();
   };
 
@@ -67,11 +71,12 @@ export default function PlayerDetailPage() {
     const kasaTotal = player.payments.filter((p) => p.isKasa).reduce((s, p) => s + p.amount, 0);
     if (kasaTotal <= 0) return;
     if (!confirm(`${player.name} için kasadaki ₺${kasaTotal.toFixed(0)} mahsup edilsin mi?`)) return;
-    await fetch("/api/payments", {
+    const res = await fetch("/api/payments", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ playerId: player.id, amount: -kasaTotal, notes: "Mahsup edildi", isKasa: true }),
     });
+    if (!res.ok) { const d = await res.json().catch(() => ({})); showError(d.error || "Mahsup yapılamadı"); return; }
     load();
   };
 
@@ -90,6 +95,7 @@ export default function PlayerDetailPage() {
 
   return (
     <div className="space-y-6">
+      {ToastEl}
       {/* Back + Header */}
       <div>
         <Link href="/players" className="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-700 transition-colors mb-4">
@@ -138,7 +144,7 @@ export default function PlayerDetailPage() {
             <Shield size={15} className="text-slate-400" />
             <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Maçlar</p>
           </div>
-          <p className="text-xl font-bold text-slate-800">{player.matchPlayers.length}</p>
+          <p className="text-xl font-bold text-slate-800">{player.matchCount}</p>
         </div>
       </div>
 

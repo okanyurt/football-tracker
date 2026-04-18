@@ -5,6 +5,7 @@ import Link from "next/link";
 import Drawer from "@/components/Drawer";
 import { format } from "date-fns";
 import { Plus, MapPin, Users, CircleDollarSign } from "lucide-react";
+import { useToast } from "@/hooks/useToast";
 import { cycleTeam } from "@/utils/teams";
 
 interface Player {
@@ -42,13 +43,15 @@ export default function MatchesPage() {
   const [team2Name, setTeam2Name] = useState("Takım 2");
   const [playerTeams, setPlayerTeams] = useState<Record<string, 1 | 2>>({});
   const [saving, setSaving] = useState(false);
+  const { showError, ToastEl } = useToast();
 
   const load = useCallback(async () => {
     const [matchRes, playerRes] = await Promise.all([fetch("/api/matches"), fetch("/api/players")]);
+    if (!matchRes.ok || !playerRes.ok) { showError("Veriler yüklenemedi"); setLoading(false); return; }
     setMatches(await matchRes.json());
     setPlayers(await playerRes.json());
     setLoading(false);
-  }, []);
+  }, [showError]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -99,7 +102,7 @@ export default function MatchesPage() {
   const handleCreate = async () => {
     if (!date || !totalCost || selectedPlayerIds.length === 0) return;
     setSaving(true);
-    await fetch("/api/matches", {
+    const res = await fetch("/api/matches", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -109,8 +112,9 @@ export default function MatchesPage() {
         ...(teamsEnabled && { team1Name, team2Name, playerTeams }),
       }),
     });
-    setShowCreate(false);
     setSaving(false);
+    if (!res.ok) { const d = await res.json().catch(() => ({})); showError(d.error || "Maç oluşturulamadı"); return; }
+    setShowCreate(false);
     load();
   };
 
@@ -118,7 +122,8 @@ export default function MatchesPage() {
     const isCancelled = !!match.cancelledAt;
     const msg = isCancelled ? "Bu maçın iptali geri alınsın mı?" : "Bu maçı iptal etmek istediğine emin misin?";
     if (!confirm(msg)) return;
-    await fetch(`/api/matches/${match.id}`, { method: "PATCH" });
+    const res = await fetch(`/api/matches/${match.id}`, { method: "PATCH" });
+    if (!res.ok) { const d = await res.json().catch(() => ({})); showError(d.error || "Maç güncellenemedi"); return; }
     load();
   };
 
@@ -132,6 +137,7 @@ export default function MatchesPage() {
 
   return (
     <div className="space-y-6">
+      {ToastEl}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-slate-800">Matches</h1>

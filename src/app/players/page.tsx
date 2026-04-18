@@ -5,6 +5,7 @@ import Link from "next/link";
 import Drawer from "@/components/Drawer";
 import Avatar from "@/components/Avatar";
 import { UserPlus, Pencil, Trash2 } from "lucide-react";
+import { useToast } from "@/hooks/useToast";
 
 interface Player {
   id: string;
@@ -24,13 +25,14 @@ export default function PlayersPage() {
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [saving, setSaving] = useState(false);
+  const { showError, ToastEl } = useToast();
 
   const load = useCallback(async () => {
     const res = await fetch("/api/players");
-    const data = await res.json();
-    setPlayers(data);
+    if (!res.ok) { showError("Oyuncular yüklenemedi"); setLoading(false); return; }
+    setPlayers(await res.json());
     setLoading(false);
-  }, []);
+  }, [showError]);
 
   useEffect(() => {
     load();
@@ -52,27 +54,31 @@ export default function PlayersPage() {
     if (!name.trim()) return;
     setSaving(true);
     if (editPlayer) {
-      await fetch(`/api/players/${editPlayer.id}`, {
+      const res = await fetch(`/api/players/${editPlayer.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name, phone }),
       });
+      setSaving(false);
+      if (!res.ok) { const d = await res.json().catch(() => ({})); showError(d.error || "Oyuncu güncellenemedi"); return; }
       setEditPlayer(null);
     } else {
-      await fetch("/api/players", {
+      const res = await fetch("/api/players", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name, phone }),
       });
+      setSaving(false);
+      if (!res.ok) { const d = await res.json().catch(() => ({})); showError(d.error || "Oyuncu eklenemedi"); return; }
       setShowAdd(false);
     }
-    setSaving(false);
     load();
   };
 
   const handleDelete = async (id: string, playerName: string) => {
     if (!confirm(`"${playerName}" silinsin mi? Tüm geçmişi de silinecek.`)) return;
-    await fetch(`/api/players/${id}`, { method: "DELETE" });
+    const res = await fetch(`/api/players/${id}`, { method: "DELETE" });
+    if (!res.ok) { const d = await res.json().catch(() => ({})); showError(d.error || "Oyuncu silinemedi"); return; }
     load();
   };
 
@@ -86,6 +92,7 @@ export default function PlayersPage() {
 
   return (
     <div className="space-y-6">
+      {ToastEl}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-slate-800">Players</h1>
