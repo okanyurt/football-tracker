@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { UpdatePlayerSchema, parseBody } from "@/lib/schemas";
 
 export async function GET(
   _req: Request,
@@ -36,19 +37,24 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const body = await request.json();
-  const { name, phone } = body;
 
-  if (!name?.trim()) {
-    return NextResponse.json({ error: "Name is required" }, { status: 400 });
+  const parsed = parseBody(UpdatePlayerSchema, await request.json());
+  if (!parsed.ok) {
+    return NextResponse.json({ error: parsed.error }, { status: 400 });
   }
 
-  const player = await prisma.player.update({
-    where: { id },
-    data: { name: name.trim(), phone: phone?.trim() || null },
-  });
+  const { name, phone } = parsed.data;
 
-  return NextResponse.json(player);
+  try {
+    const player = await prisma.player.update({
+      where: { id },
+      data: { name, phone: phone?.trim() || null },
+    });
+    return NextResponse.json(player);
+  } catch (e) {
+    console.error("[PUT /api/players/:id]", e);
+    return NextResponse.json({ error: "Oyuncu güncellenemedi" }, { status: 500 });
+  }
 }
 
 export async function DELETE(
@@ -56,6 +62,11 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  await prisma.player.delete({ where: { id } });
-  return NextResponse.json({ success: true });
+  try {
+    await prisma.player.delete({ where: { id } });
+    return NextResponse.json({ success: true });
+  } catch (e) {
+    console.error("[DELETE /api/players/:id]", e);
+    return NextResponse.json({ error: "Oyuncu silinemedi" }, { status: 500 });
+  }
 }

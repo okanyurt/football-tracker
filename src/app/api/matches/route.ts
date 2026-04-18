@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { CreateMatchSchema, parseBody } from "@/lib/schemas";
 
 export async function GET() {
   const matches = await prisma.match.findMany({
@@ -15,53 +16,60 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const body = await request.json();
-  const { date, location, totalCost, notes, playerIds, goalkeeperFree, goalkeeperPlayerIds, perPlayerAmount, team1Name, team2Name, playerTeams } = body;
-
-  if (!date || !totalCost) {
-    return NextResponse.json(
-      { error: "Date and total cost are required" },
-      { status: 400 }
-    );
+  const parsed = parseBody(CreateMatchSchema, await request.json());
+  if (!parsed.ok) {
+    return NextResponse.json({ error: parsed.error }, { status: 400 });
   }
 
-  if (!playerIds || playerIds.length === 0) {
-    return NextResponse.json(
-      { error: "At least one player must be selected" },
-      { status: 400 }
-    );
+  const {
+    date,
+    location,
+    totalCost,
+    notes,
+    playerIds,
+    goalkeeperFree,
+    goalkeeperPlayerIds,
+    perPlayerAmount,
+    team1Name,
+    team2Name,
+    playerTeams,
+  } = parsed.data;
+
+  const freeIds: string[] = goalkeeperFree && goalkeeperPlayerIds?.length
+    ? goalkeeperPlayerIds
+    : [];
+  const payingCount = playerIds.filter((id) => !freeIds.includes(id)).length;
+  const amountPerPlayer =
+    perPlayerAmount != null
+      ? perPlayerAmount
+      : payingCount > 0
+      ? totalCost / payingCount
+      : 0;
+
+  try {
+    const match = await prisma.match.create({
+      data: {
+        date: new Date(date),
+        location: location?.trim() || null,
+        totalCost,
+        notes: notes?.trim() || null,
+        goalkeeperFree: !!goalkeeperFree,
+        team1Name: team1Name?.trim() || null,
+        team2Name: team2Name?.trim() || null,
+        matchPlayers: {
+          create: playerIds.map((playerId) => ({
+            playerId,
+            isGoalkeeper: freeIds.includes(playerId),
+            amountOwed: freeIds.includes(playerId) ? 0 : amountPerPlayer,
+            team: playerTeams?.[playerId] ?? null,
+          })),
+        },
+      },
+      include: { matchPlayers: { include: { player: true } } },
+    });
+    return NextResponse.json(match, { status: 201 });
+  } catch (e) {
+    console.error("[POST /api/matches]", e);
+    return NextResponse.json({ error: "Maç oluşturulamadı" }, { status: 500 });
   }
-
-  const freeIds: string[] = goalkeeperFree && goalkeeperPlayerIds?.length ? goalkeeperPlayerIds : [];
-  const payingCount = playerIds.filter((id: string) => !freeIds.includes(id)).length;
-  const amountPerPlayer = perPlayerAmount != null
-    ? Number(perPlayerAmount)
-    : payingCount > 0 ? Number(totalCost) / payingCount : 0;
-
-  const match = await prisma.match.create({
-    data: {
-      date: new Date(date),
-      location: location?.trim() || null,
-      totalCost: Number(totalCost),
-      notes: notes?.trim() || null,
-      goalkeeperFree: !!goalkeeperFree,
-      team1Name: team1Name?.trim() || null,
-      team2Name: team2Name?.trim() || null,
-      matchPlayers: {
-        create: playerIds.map((playerId: string) => ({
-          playerId,
-          isGoalkeeper: freeIds.includes(playerId),
-          amountOwed: freeIds.includes(playerId) ? 0 : amountPerPlayer,
-          team: playerTeams?.[playerId] ?? null,
-        })),
-      },
-    },
-    include: {
-      matchPlayers: {
-        include: { player: true },
-      },
-    },
-  });
-
-  return NextResponse.json(match, { status: 201 });
 }

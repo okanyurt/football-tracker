@@ -1,16 +1,26 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { CreatePaymentSchema, parseBody } from "@/lib/schemas";
 
 export async function POST(request: Request) {
-  const body = await request.json();
-  const { playerId, amount, notes, date, isKasa } = body;
+  const parsed = parseBody(CreatePaymentSchema, await request.json());
+  if (!parsed.ok) {
+    return NextResponse.json({ error: parsed.error }, { status: 400 });
+  }
 
-  const parsedAmount = Number(amount);
+  const { playerId, amount, notes, date, isKasa } = parsed.data;
   const isKasaBool = isKasa === true;
 
-  if (!playerId || !amount || (isKasaBool ? parsedAmount === 0 : parsedAmount <= 0)) {
+  if (!isKasaBool && amount <= 0) {
     return NextResponse.json(
-      { error: "Player and a valid amount are required" },
+      { error: "Geçerli bir tutar giriniz" },
+      { status: 400 }
+    );
+  }
+
+  if (isKasaBool && amount === 0) {
+    return NextResponse.json(
+      { error: "Kasa tutarı sıfır olamaz" },
       { status: 400 }
     );
   }
@@ -19,7 +29,7 @@ export async function POST(request: Request) {
     const payment = await prisma.payment.create({
       data: {
         playerId,
-        amount: parsedAmount,
+        amount,
         notes: notes?.trim() || null,
         date: date ? new Date(date) : new Date(),
         isKasa: isKasaBool,
@@ -28,7 +38,7 @@ export async function POST(request: Request) {
     });
     return NextResponse.json(payment, { status: 201 });
   } catch (e) {
-    console.error("[POST /api/payments] error:", e);
-    return NextResponse.json({ error: String(e) }, { status: 500 });
+    console.error("[POST /api/payments]", e);
+    return NextResponse.json({ error: "Ödeme oluşturulamadı" }, { status: 500 });
   }
 }

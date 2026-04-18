@@ -6,13 +6,19 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const payment = await prisma.payment.findUnique({ where: { id } });
-  if (!payment) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  const updated = await prisma.payment.update({
-    where: { id },
-    data: { cancelledAt: payment.cancelledAt ? null : new Date() },
-  });
-  return NextResponse.json(updated);
+  try {
+    const payment = await prisma.payment.findUnique({ where: { id } });
+    if (!payment) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+    const updated = await prisma.payment.update({
+      where: { id },
+      data: { cancelledAt: payment.cancelledAt ? null : new Date() },
+    });
+    return NextResponse.json(updated);
+  } catch (e) {
+    console.error("[PATCH /api/payments/:id]", e);
+    return NextResponse.json({ error: "Ödeme güncellenemedi" }, { status: 500 });
+  }
 }
 
 export async function DELETE(
@@ -20,6 +26,11 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  await prisma.payment.delete({ where: { id } });
-  return NextResponse.json({ success: true });
+  try {
+    await prisma.payment.delete({ where: { id } });
+    return NextResponse.json({ success: true });
+  } catch (e) {
+    console.error("[DELETE /api/payments/:id]", e);
+    return NextResponse.json({ error: "Ödeme silinemedi" }, { status: 500 });
+  }
 }

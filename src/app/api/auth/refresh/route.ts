@@ -6,6 +6,7 @@ import {
   ACCESS_TOKEN_COOKIE,
   REFRESH_TOKEN_COOKIE,
   ACCESS_MAX_AGE,
+  buildCookieOptions,
 } from "@/lib/auth";
 
 export async function POST(req: NextRequest) {
@@ -29,13 +30,7 @@ export async function POST(req: NextRequest) {
     });
 
     const response = NextResponse.json({ success: true, username: user.username });
-    response.cookies.set(ACCESS_TOKEN_COOKIE, newAccessToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      maxAge: ACCESS_MAX_AGE,
-      path: "/",
-    });
+    response.cookies.set(ACCESS_TOKEN_COOKIE, newAccessToken, buildCookieOptions(ACCESS_MAX_AGE));
 
     return response;
   } catch {
