@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { CreatePlayerSchema, parseBody } from "@/lib/schemas";
+import { calculatePlayerBalance } from "@/lib/playerBalance";
 
 export async function GET() {
   const players = await prisma.player.findMany({
@@ -13,22 +14,19 @@ export async function GET() {
   });
 
   const playersWithBalance = players.map((player) => {
-    const activeMatches = player.matchPlayers.filter(
-      (mp) => !mp.match.cancelledAt && !mp.match.deletedAt
+    const { balance, totalOwed, totalPaid, matchCount } = calculatePlayerBalance(
+      player.matchPlayers,
+      player.payments
     );
-    const totalOwed = activeMatches.reduce((sum, mp) => sum + mp.amountOwed, 0);
-    const totalPaid = player.payments
-      .filter((p) => !p.cancelledAt && !p.deletedAt)
-      .reduce((sum, p) => sum + p.amount, 0);
     return {
       id: player.id,
       name: player.name,
       phone: player.phone,
       createdAt: player.createdAt,
-      balance: totalPaid - totalOwed,
+      balance,
       totalOwed,
       totalPaid,
-      matchCount: activeMatches.length,
+      matchCount,
     };
   });
 

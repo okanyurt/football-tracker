@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { UpdatePlayerSchema, parseBody } from "@/lib/schemas";
+import { calculatePlayerBalance } from "@/lib/playerBalance";
 
 export async function GET(
   _req: Request,
@@ -22,14 +23,12 @@ export async function GET(
     return NextResponse.json({ error: "Player not found" }, { status: 404 });
   }
 
-  const totalOwed = player.matchPlayers
-    .filter((mp) => !mp.match.cancelledAt && !mp.match.deletedAt)
-    .reduce((sum, mp) => sum + mp.amountOwed, 0);
-  const totalPaid = player.payments
-    .filter((p) => !p.cancelledAt && !p.deletedAt)
-    .reduce((sum, p) => sum + p.amount, 0);
+  const { balance, totalOwed, totalPaid, matchCount } = calculatePlayerBalance(
+    player.matchPlayers,
+    player.payments
+  );
 
-  return NextResponse.json({ ...player, balance: totalPaid - totalOwed, totalOwed, totalPaid });
+  return NextResponse.json({ ...player, balance, totalOwed, totalPaid, matchCount });
 }
 
 export async function PUT(
