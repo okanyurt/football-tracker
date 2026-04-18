@@ -6,16 +6,8 @@ import Drawer from "@/components/Drawer";
 import Avatar from "@/components/Avatar";
 import { UserPlus, Pencil, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/useToast";
-
-interface Player {
-  id: string;
-  name: string;
-  phone: string | null;
-  balance: number;
-  totalOwed: number;
-  totalPaid: number;
-  matchCount: number;
-}
+import type { Player } from "@/types/players";
+import { getPlayers, createPlayer, updatePlayer, deletePlayer } from "@/services/players";
 
 export default function PlayersPage() {
   const [players, setPlayers] = useState<Player[]>([]);
@@ -28,9 +20,9 @@ export default function PlayersPage() {
   const { showError, ToastEl } = useToast();
 
   const load = useCallback(async () => {
-    const res = await fetch("/api/players");
-    if (!res.ok) { showError("Oyuncular yüklenemedi"); setLoading(false); return; }
-    setPlayers(await res.json());
+    const { data, error } = await getPlayers();
+    if (error) { showError(error); setLoading(false); return; }
+    setPlayers(data!);
     setLoading(false);
   }, [showError]);
 
@@ -54,22 +46,14 @@ export default function PlayersPage() {
     if (!name.trim()) return;
     setSaving(true);
     if (editPlayer) {
-      const res = await fetch(`/api/players/${editPlayer.id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, phone }),
-      });
+      const { error } = await updatePlayer(editPlayer.id, name, phone);
       setSaving(false);
-      if (!res.ok) { const d = await res.json().catch(() => ({})); showError(d.error || "Oyuncu güncellenemedi"); return; }
+      if (error) { showError(error); return; }
       setEditPlayer(null);
     } else {
-      const res = await fetch("/api/players", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, phone }),
-      });
+      const { error } = await createPlayer(name, phone);
       setSaving(false);
-      if (!res.ok) { const d = await res.json().catch(() => ({})); showError(d.error || "Oyuncu eklenemedi"); return; }
+      if (error) { showError(error); return; }
       setShowAdd(false);
     }
     load();
@@ -77,8 +61,8 @@ export default function PlayersPage() {
 
   const handleDelete = async (id: string, playerName: string) => {
     if (!confirm(`"${playerName}" silinsin mi? Tüm geçmişi de silinecek.`)) return;
-    const res = await fetch(`/api/players/${id}`, { method: "DELETE" });
-    if (!res.ok) { const d = await res.json().catch(() => ({})); showError(d.error || "Oyuncu silinemedi"); return; }
+    const { error } = await deletePlayer(id);
+    if (error) { showError(error); return; }
     load();
   };
 

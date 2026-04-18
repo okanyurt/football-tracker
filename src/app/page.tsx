@@ -6,16 +6,9 @@ import Modal from "@/components/Modal";
 import { TrendingDown, Wallet, Users } from "lucide-react";
 import Avatar from "@/components/Avatar";
 import { useToast } from "@/hooks/useToast";
-
-interface Player {
-  id: string;
-  name: string;
-  phone: string | null;
-  balance: number;
-  totalOwed: number;
-  totalPaid: number;
-  matchCount: number;
-}
+import type { Player } from "@/types/players";
+import { getPlayers } from "@/services/players";
+import { createPayment } from "@/services/payments";
 
 export default function DashboardPage() {
   const [players, setPlayers] = useState<Player[]>([]);
@@ -30,9 +23,9 @@ export default function DashboardPage() {
   const { showError, ToastEl } = useToast();
 
   const load = useCallback(async () => {
-    const res = await fetch("/api/players");
-    if (!res.ok) { showError("Oyuncular yüklenemedi"); setLoading(false); return; }
-    setPlayers(await res.json());
+    const { data, error } = await getPlayers();
+    if (error) { showError(error); setLoading(false); return; }
+    setPlayers(data!);
     setLoading(false);
   }, [showError]);
 
@@ -43,13 +36,9 @@ export default function DashboardPage() {
   const handlePayment = async () => {
     if (!payModal || !payAmount) return;
     setSaving(true);
-    const res = await fetch("/api/payments", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ playerId: payModal.id, amount: payAmount, notes: payNotes }),
-    });
+    const { error } = await createPayment({ playerId: payModal.id, amount: payAmount, notes: payNotes });
     setSaving(false);
-    if (!res.ok) { const d = await res.json().catch(() => ({})); showError(d.error || "Ödeme kaydedilemedi"); return; }
+    if (error) { showError(error); return; }
     setPayModal(null);
     setPayAmount("");
     setPayNotes("");
@@ -59,13 +48,9 @@ export default function DashboardPage() {
   const handleKasa = async () => {
     if (!kasaModal || !kasaAmount) return;
     setSaving(true);
-    const res = await fetch("/api/payments", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ playerId: kasaModal.id, amount: kasaAmount, notes: kasaNotes || "Kasa yüklemesi", isKasa: true }),
-    });
+    const { error } = await createPayment({ playerId: kasaModal.id, amount: kasaAmount, notes: kasaNotes || "Kasa yüklemesi", isKasa: true });
     setSaving(false);
-    if (!res.ok) { const d = await res.json().catch(() => ({})); showError(d.error || "Kasa kaydedilemedi"); return; }
+    if (error) { showError(error); return; }
     setKasaModal(null);
     setKasaAmount("");
     setKasaNotes("");

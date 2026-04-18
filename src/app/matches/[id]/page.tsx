@@ -9,36 +9,15 @@ import { ArrowLeft, CircleDollarSign, Users, UserPlus2, X, Pencil, Check } from 
 import { useToast } from "@/hooks/useToast";
 import { cycleTeam } from "@/utils/teams";
 import Avatar from "@/components/Avatar";
-
-interface Player {
-  id: string;
-  name: string;
-}
-
-interface MatchPlayer {
-  id: string;
-  playerId: string;
-  amountOwed: number;
-  isGoalkeeper: boolean;
-  team: number | null;
-  player: Player;
-}
-
-interface Match {
-  id: string;
-  date: string;
-  location: string | null;
-  totalCost: number;
-  notes: string | null;
-  team1Name: string | null;
-  team2Name: string | null;
-  matchPlayers: MatchPlayer[];
-}
+import type { MatchDetail } from "@/types/matches";
+import type { Player } from "@/types/players";
+import { getMatch, updateTeams, addParticipants, removeParticipant } from "@/services/matches";
+import { getPlayers } from "@/services/players";
 
 export default function MatchDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
-  const [match, setMatch] = useState<Match | null>(null);
+  const [match, setMatch] = useState<MatchDetail | null>(null);
   const [allPlayers, setAllPlayers] = useState<Player[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddPlayers, setShowAddPlayers] = useState(false);
@@ -53,20 +32,17 @@ export default function MatchDetailPage() {
   const [editPlayerTeams, setEditPlayerTeams] = useState<Record<string, 1 | 2>>({});
 
   const loadMatch = useCallback(async () => {
-    const res = await fetch(`/api/matches/${id}`);
-    if (!res.ok) { router.push("/matches"); return; }
-    setMatch(await res.json());
+    const { data, error } = await getMatch(id);
+    if (error) { router.push("/matches"); return; }
+    setMatch(data!);
   }, [id, router]);
 
   useEffect(() => {
     const init = async () => {
-      const [matchRes, playersRes] = await Promise.all([
-        fetch(`/api/matches/${id}`),
-        fetch("/api/players"),
-      ]);
-      if (!matchRes.ok) { router.push("/matches"); return; }
-      setMatch(await matchRes.json());
-      setAllPlayers(await playersRes.json());
+      const [matchResult, playerResult] = await Promise.all([getMatch(id), getPlayers()]);
+      if (matchResult.error) { router.push("/matches"); return; }
+      setMatch(matchResult.data!);
+      setAllPlayers(playerResult.data ?? []);
       setLoading(false);
     };
     init();
@@ -90,17 +66,9 @@ export default function MatchDetailPage() {
 
   const saveTeams = async () => {
     setSaving(true);
-    const res = await fetch(`/api/matches/${id}/teams`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        team1Name: editTeam1Name,
-        team2Name: editTeam2Name,
-        playerTeams: editPlayerTeams,
-      }),
-    });
+    const { error } = await updateTeams(id, { team1Name: editTeam1Name, team2Name: editTeam2Name, playerTeams: editPlayerTeams });
     setSaving(false);
-    if (!res.ok) { const d = await res.json().catch(() => ({})); showError(d.error || "Takımlar kaydedilemedi"); return; }
+    if (error) { showError(error); return; }
     setEditingTeams(false);
     loadMatch();
   };
@@ -115,25 +83,17 @@ export default function MatchDetailPage() {
   const handleAddPlayers = async () => {
     if (selectedIds.length === 0) return;
     setSaving(true);
-    const res = await fetch(`/api/matches/${id}/participants`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ playerIds: selectedIds }),
-    });
+    const { error } = await addParticipants(id, selectedIds);
     setSaving(false);
-    if (!res.ok) { const d = await res.json().catch(() => ({})); showError(d.error || "Oyuncu eklenemedi"); return; }
+    if (error) { showError(error); return; }
     setShowAddPlayers(false);
     loadMatch();
   };
 
   const handleRemovePlayer = async (playerId: string, playerName: string) => {
     if (!confirm(`"${playerName}" bu maçtan çıkarılsın mı?`)) return;
-    const res = await fetch(`/api/matches/${id}/participants`, {
-      method: "DELETE",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ playerId }),
-    });
-    if (!res.ok) { const d = await res.json().catch(() => ({})); showError(d.error || "Oyuncu çıkarılamadı"); return; }
+    const { error } = await removeParticipant(id, playerId);
+    if (error) { showError(error); return; }
     loadMatch();
   };
 

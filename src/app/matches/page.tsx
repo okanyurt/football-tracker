@@ -7,25 +7,13 @@ import { format } from "date-fns";
 import { Plus, MapPin, Users, CircleDollarSign } from "lucide-react";
 import { useToast } from "@/hooks/useToast";
 import { cycleTeam } from "@/utils/teams";
-
-interface Player {
-  id: string;
-  name: string;
-}
-
-interface Match {
-  id: string;
-  date: string;
-  location: string | null;
-  totalCost: number;
-  notes: string | null;
-  cancelledAt: string | null;
-  goalkeeperFree: boolean;
-  matchPlayers: { isGoalkeeper: boolean; player: Player }[];
-}
+import type { MatchListItem } from "@/types/matches";
+import type { Player } from "@/types/players";
+import { getMatches, createMatch, toggleCancelMatch } from "@/services/matches";
+import { getPlayers } from "@/services/players";
 
 export default function MatchesPage() {
-  const [matches, setMatches] = useState<Match[]>([]);
+  const [matches, setMatches] = useState<MatchListItem[]>([]);
   const [players, setPlayers] = useState<Player[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
@@ -46,10 +34,10 @@ export default function MatchesPage() {
   const { showError, ToastEl } = useToast();
 
   const load = useCallback(async () => {
-    const [matchRes, playerRes] = await Promise.all([fetch("/api/matches"), fetch("/api/players")]);
-    if (!matchRes.ok || !playerRes.ok) { showError("Veriler yüklenemedi"); setLoading(false); return; }
-    setMatches(await matchRes.json());
-    setPlayers(await playerRes.json());
+    const [matchResult, playerResult] = await Promise.all([getMatches(), getPlayers()]);
+    if (matchResult.error || playerResult.error) { showError("Veriler yüklenemedi"); setLoading(false); return; }
+    setMatches(matchResult.data!);
+    setPlayers(playerResult.data!);
     setLoading(false);
   }, [showError]);
 
@@ -102,28 +90,24 @@ export default function MatchesPage() {
   const handleCreate = async () => {
     if (!date || !totalCost || selectedPlayerIds.length === 0) return;
     setSaving(true);
-    const res = await fetch("/api/matches", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        date, location, totalCost: computedTotal, notes, playerIds: selectedPlayerIds,
-        goalkeeperFree, goalkeeperPlayerIds: goalkeeperFree ? goalkeeperPlayerIds : [],
-        ...(costMode === "perPlayer" && { perPlayerAmount: Number(totalCost) }),
-        ...(teamsEnabled && { team1Name, team2Name, playerTeams }),
-      }),
+    const { error } = await createMatch({
+      date, location, totalCost: computedTotal, notes, playerIds: selectedPlayerIds,
+      goalkeeperFree, goalkeeperPlayerIds: goalkeeperFree ? goalkeeperPlayerIds : [],
+      ...(costMode === "perPlayer" && { perPlayerAmount: Number(totalCost) }),
+      ...(teamsEnabled && { team1Name, team2Name, playerTeams }),
     });
     setSaving(false);
-    if (!res.ok) { const d = await res.json().catch(() => ({})); showError(d.error || "Maç oluşturulamadı"); return; }
+    if (error) { showError(error); return; }
     setShowCreate(false);
     load();
   };
 
-  const handleCancel = async (match: Match) => {
+  const handleCancel = async (match: MatchListItem) => {
     const isCancelled = !!match.cancelledAt;
     const msg = isCancelled ? "Bu maçın iptali geri alınsın mı?" : "Bu maçı iptal etmek istediğine emin misin?";
     if (!confirm(msg)) return;
-    const res = await fetch(`/api/matches/${match.id}`, { method: "PATCH" });
-    if (!res.ok) { const d = await res.json().catch(() => ({})); showError(d.error || "Maç güncellenemedi"); return; }
+    const { error } = await toggleCancelMatch(match.id);
+    if (error) { showError(error); return; }
     load();
   };
 

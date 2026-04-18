@@ -7,39 +7,9 @@ import { format } from "date-fns";
 import { ArrowLeft, TrendingDown, TrendingUp, Shield, ArrowUpCircle, ArrowDownCircle } from "lucide-react";
 import Avatar from "@/components/Avatar";
 import { useToast } from "@/hooks/useToast";
-
-interface MatchPlayer {
-  id: string;
-  amountOwed: number;
-  match: {
-    id: string;
-    date: string;
-    location: string | null;
-    totalCost: number;
-    cancelledAt: string | null;
-  };
-}
-
-interface Payment {
-  id: string;
-  amount: number;
-  date: string;
-  notes: string | null;
-  isKasa: boolean;
-  cancelledAt: string | null;
-}
-
-interface PlayerDetail {
-  id: string;
-  name: string;
-  phone: string | null;
-  balance: number;
-  totalOwed: number;
-  totalPaid: number;
-  matchCount: number;
-  matchPlayers: MatchPlayer[];
-  payments: Payment[];
-}
+import type { PlayerDetail, PaymentEntry } from "@/types/players";
+import { getPlayer } from "@/services/players";
+import { createPayment, toggleCancelPayment } from "@/services/payments";
 
 export default function PlayerDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -49,20 +19,19 @@ export default function PlayerDetailPage() {
   const { showError, ToastEl } = useToast();
 
   const load = useCallback(async () => {
-    const res = await fetch(`/api/players/${id}`);
-    if (!res.ok) { router.push("/players"); return; }
-    const data = await res.json();
-    setPlayer(data);
+    const { data, error } = await getPlayer(id);
+    if (error) { router.push("/players"); return; }
+    setPlayer(data!);
     setLoading(false);
   }, [id, router]);
 
   useEffect(() => { load(); }, [load]);
 
-  const handleCancelPayment = async (payment: Payment) => {
+  const handleCancelPayment = async (payment: PaymentEntry) => {
     const msg = payment.cancelledAt ? "Bu ödemeyi geri al?" : "Bu ödemeyi iptal et?";
     if (!confirm(msg)) return;
-    const res = await fetch(`/api/payments/${payment.id}`, { method: "PATCH" });
-    if (!res.ok) { const d = await res.json().catch(() => ({})); showError(d.error || "Ödeme güncellenemedi"); return; }
+    const { error } = await toggleCancelPayment(payment.id);
+    if (error) { showError(error); return; }
     load();
   };
 
@@ -71,12 +40,8 @@ export default function PlayerDetailPage() {
     const kasaTotal = player.payments.filter((p) => p.isKasa).reduce((s, p) => s + p.amount, 0);
     if (kasaTotal <= 0) return;
     if (!confirm(`${player.name} için kasadaki ₺${kasaTotal.toFixed(0)} mahsup edilsin mi?`)) return;
-    const res = await fetch("/api/payments", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ playerId: player.id, amount: -kasaTotal, notes: "Mahsup edildi", isKasa: true }),
-    });
-    if (!res.ok) { const d = await res.json().catch(() => ({})); showError(d.error || "Mahsup yapılamadı"); return; }
+    const { error } = await createPayment({ playerId: player.id, amount: -kasaTotal, notes: "Mahsup edildi", isKasa: true });
+    if (error) { showError(error); return; }
     load();
   };
 
