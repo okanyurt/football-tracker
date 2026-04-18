@@ -8,7 +8,7 @@ export async function GET(
 ) {
   const { id } = await params;
   const player = await prisma.player.findUnique({
-    where: { id },
+    where: { id, deletedAt: null },
     include: {
       matchPlayers: {
         include: { match: true },
@@ -23,10 +23,10 @@ export async function GET(
   }
 
   const totalOwed = player.matchPlayers
-    .filter((mp) => !mp.match.cancelledAt)
+    .filter((mp) => !mp.match.cancelledAt && !mp.match.deletedAt)
     .reduce((sum, mp) => sum + mp.amountOwed, 0);
   const totalPaid = player.payments
-    .filter((p) => !p.cancelledAt)
+    .filter((p) => !p.cancelledAt && !p.deletedAt)
     .reduce((sum, p) => sum + p.amount, 0);
 
   return NextResponse.json({ ...player, balance: totalPaid - totalOwed, totalOwed, totalPaid });
@@ -47,7 +47,7 @@ export async function PUT(
 
   try {
     const player = await prisma.player.update({
-      where: { id },
+      where: { id, deletedAt: null },
       data: { name, phone: phone?.trim() || null },
     });
     return NextResponse.json(player);
@@ -63,7 +63,13 @@ export async function DELETE(
 ) {
   const { id } = await params;
   try {
-    await prisma.player.delete({ where: { id } });
+    const player = await prisma.player.findUnique({ where: { id, deletedAt: null } });
+    if (!player) return NextResponse.json({ error: "Player not found" }, { status: 404 });
+
+    await prisma.player.update({
+      where: { id },
+      data: { deletedAt: new Date() },
+    });
     return NextResponse.json({ success: true });
   } catch (e) {
     console.error("[DELETE /api/players/:id]", e);

@@ -4,6 +4,7 @@ import { CreateMatchSchema, parseBody } from "@/lib/schemas";
 
 export async function GET() {
   const matches = await prisma.match.findMany({
+    where: { deletedAt: null },
     include: {
       matchPlayers: {
         include: { player: true },

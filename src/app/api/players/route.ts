@@ -4,6 +4,7 @@ import { CreatePlayerSchema, parseBody } from "@/lib/schemas";
 
 export async function GET() {
   const players = await prisma.player.findMany({
+    where: { deletedAt: null },
     include: {
       matchPlayers: { include: { match: true } },
       payments: true,
@@ -12,10 +13,12 @@ export async function GET() {
   });
 
   const playersWithBalance = players.map((player) => {
-    const activeMatches = player.matchPlayers.filter((mp) => !mp.match.cancelledAt);
+    const activeMatches = player.matchPlayers.filter(
+      (mp) => !mp.match.cancelledAt && !mp.match.deletedAt
+    );
     const totalOwed = activeMatches.reduce((sum, mp) => sum + mp.amountOwed, 0);
     const totalPaid = player.payments
-      .filter((p) => !p.cancelledAt)
+      .filter((p) => !p.cancelledAt && !p.deletedAt)
       .reduce((sum, p) => sum + p.amount, 0);
     return {
       id: player.id,

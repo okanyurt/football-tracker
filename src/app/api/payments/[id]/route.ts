@@ -7,7 +7,7 @@ export async function PATCH(
 ) {
   const { id } = await params;
   try {
-    const payment = await prisma.payment.findUnique({ where: { id } });
+    const payment = await prisma.payment.findUnique({ where: { id, deletedAt: null } });
     if (!payment) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
     const updated = await prisma.payment.update({
@@ -27,7 +27,13 @@ export async function DELETE(
 ) {
   const { id } = await params;
   try {
-    await prisma.payment.delete({ where: { id } });
+    const payment = await prisma.payment.findUnique({ where: { id, deletedAt: null } });
+    if (!payment) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+    await prisma.payment.update({
+      where: { id },
+      data: { deletedAt: new Date() },
+    });
     return NextResponse.json({ success: true });
   } catch (e) {
     console.error("[DELETE /api/payments/:id]", e);

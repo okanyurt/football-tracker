@@ -7,7 +7,7 @@ export async function GET(
 ) {
   const { id } = await params;
   const match = await prisma.match.findUnique({
-    where: { id },
+    where: { id, deletedAt: null },
     include: { matchPlayers: { include: { player: true } } },
   });
 
@@ -25,7 +25,7 @@ export async function PATCH(
   const { id } = await params;
 
   try {
-    const match = await prisma.match.findUnique({ where: { id } });
+    const match = await prisma.match.findUnique({ where: { id, deletedAt: null } });
     if (!match) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
     const updated = await prisma.match.update({
@@ -45,7 +45,13 @@ export async function DELETE(
 ) {
   const { id } = await params;
   try {
-    await prisma.match.delete({ where: { id } });
+    const match = await prisma.match.findUnique({ where: { id, deletedAt: null } });
+    if (!match) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+    await prisma.match.update({
+      where: { id },
+      data: { deletedAt: new Date() },
+    });
     return NextResponse.json({ success: true });
   } catch (e) {
     console.error("[DELETE /api/matches/:id]", e);
