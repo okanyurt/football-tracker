@@ -3,15 +3,16 @@
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import Modal from "@/components/Modal";
-import { TrendingDown, Wallet, Users } from "lucide-react";
+import { TrendingDown, Wallet, Users, UserX } from "lucide-react";
 import Avatar from "@/components/Avatar";
 import { useToast } from "@/hooks/useToast";
-import type { Player } from "@/types/players";
-import { getPlayers } from "@/services/players";
+import type { Player, AtRiskPlayer } from "@/types/players";
+import { getPlayers, getAtRiskPlayers } from "@/services/players";
 import { createPayment } from "@/services/payments";
 
 export default function DashboardPage() {
   const [players, setPlayers] = useState<Player[]>([]);
+  const [atRisk, setAtRisk] = useState<AtRiskPlayer[]>([]);
   const [loading, setLoading] = useState(true);
   const [payModal, setPayModal] = useState<Player | null>(null);
   const [payAmount, setPayAmount] = useState("");
@@ -23,9 +24,10 @@ export default function DashboardPage() {
   const { showError, ToastEl } = useToast();
 
   const load = useCallback(async () => {
-    const { data, error } = await getPlayers();
-    if (error) { showError(error); setLoading(false); return; }
-    setPlayers(data!);
+    const [playersRes, atRiskRes] = await Promise.all([getPlayers(), getAtRiskPlayers()]);
+    if (playersRes.error) { showError(playersRes.error); setLoading(false); return; }
+    setPlayers(playersRes.data!);
+    setAtRisk(atRiskRes.data?.players ?? []);
     setLoading(false);
   }, [showError]);
 
@@ -36,7 +38,7 @@ export default function DashboardPage() {
   const handlePayment = async () => {
     if (!payModal || !payAmount) return;
     setSaving(true);
-    const { error } = await createPayment({ playerId: payModal.id, amount: payAmount, notes: payNotes });
+    const { error } = await createPayment({ playerId: payModal.id, amount: parseFloat(payAmount), notes: payNotes });
     setSaving(false);
     if (error) { showError(error); return; }
     setPayModal(null);
@@ -48,7 +50,7 @@ export default function DashboardPage() {
   const handleKasa = async () => {
     if (!kasaModal || !kasaAmount) return;
     setSaving(true);
-    const { error } = await createPayment({ playerId: kasaModal.id, amount: kasaAmount, notes: kasaNotes || "Kasa yüklemesi", isKasa: true });
+    const { error } = await createPayment({ playerId: kasaModal.id, amount: parseFloat(kasaAmount), notes: kasaNotes || "Kasa yüklemesi", isKasa: true });
     setSaving(false);
     if (error) { showError(error); return; }
     setKasaModal(null);
@@ -116,6 +118,31 @@ export default function DashboardPage() {
         </div>
       </div>
 
+      {/* At-Risk Players */}
+      {atRisk.length > 0 && (
+        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-5">
+          <div className="flex items-center gap-2 mb-3">
+            <UserX size={18} className="text-amber-600" />
+            <h2 className="text-sm font-semibold text-amber-800">Gruptan Çıkarılacaklar</h2>
+            <span className="ml-auto bg-amber-200 text-amber-800 text-xs font-bold px-2 py-0.5 rounded-full">
+              Son 4 maça gelmedi
+            </span>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {atRisk.map((p) => (
+              <Link
+                key={p.id}
+                href={`/players/${p.id}`}
+                className="flex items-center gap-2 bg-white border border-amber-200 rounded-xl px-3 py-1.5 hover:border-amber-400 transition-colors"
+              >
+                <Avatar name={p.name} size="sm" />
+                <span className="text-sm font-medium text-slate-700">{p.name}</span>
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Player Table */}
       {players.length === 0 ? (
         <div className="bg-white rounded-2xl border border-dashed border-slate-300 p-16 text-center">
@@ -153,9 +180,16 @@ export default function DashboardPage() {
                             {player.matchCount}
                           </span>
                         </div>
-                        <Link href={`/players/${player.id}`} className="font-medium text-slate-800 hover:text-emerald-600 transition-colors">
-                          {player.name}
-                        </Link>
+                        <div className="flex items-center gap-2">
+                          <Link href={`/players/${player.id}`} className="font-medium text-slate-800 hover:text-emerald-600 transition-colors">
+                            {player.name}
+                          </Link>
+                          {player.missedStreak > 0 && (
+                            <span className="text-[11px] font-bold bg-red-100 text-red-600 px-1.5 py-0.5 rounded-md leading-none">
+                              -{player.missedStreak} maç
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </td>
                     <td className="px-5 py-3.5 text-right text-sm text-slate-400 hidden sm:table-cell">

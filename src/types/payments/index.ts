@@ -9,7 +9,7 @@ export interface Payment {
 
 export interface CreatePaymentDto {
   playerId: string;
-  amount: number | string;
+  amount: number;
   notes?: string;
   date?: string;
   isKasa?: boolean;

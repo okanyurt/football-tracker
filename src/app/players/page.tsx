@@ -124,9 +124,16 @@ export default function PlayersPage() {
                           {player.matchCount}
                         </span>
                       </div>
-                      <Link href={`/players/${player.id}`} className="font-medium text-slate-800 hover:text-emerald-600 transition-colors">
-                        {player.name}
-                      </Link>
+                      <div className="flex items-center gap-2">
+                        <Link href={`/players/${player.id}`} className="font-medium text-slate-800 hover:text-emerald-600 transition-colors">
+                          {player.name}
+                        </Link>
+                        {player.missedStreak > 0 && (
+                          <span className="text-[11px] font-bold bg-red-100 text-red-600 px-1.5 py-0.5 rounded-md leading-none">
+                            -{player.missedStreak} maç
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </td>
                   <td className="px-5 py-3.5 text-slate-400 text-sm hidden sm:table-cell">

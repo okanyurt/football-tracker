@@ -6,6 +6,7 @@ export interface Player {
   totalOwed: number;
   totalPaid: number;
   matchCount: number;
+  missedStreak: number;
 }
 
 export interface MatchPlayerEntry {
@@ -27,6 +28,16 @@ export interface PaymentEntry {
   notes: string | null;
   isKasa: boolean;
   cancelledAt: string | null;
+}
+
+export interface AtRiskPlayer {
+  id: string;
+  name: string;
+}
+
+export interface AtRiskResult {
+  players: AtRiskPlayer[];
+  matchesChecked: number;
 }
 
 export interface PlayerDetail extends Player {

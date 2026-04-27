@@ -184,7 +184,7 @@ export default function PlayerDetailPage() {
               <p className="text-slate-400 text-sm">Henüz maç yok.</p>
             ) : (
               <div className="space-y-2">
-                {player.matchPlayers.map((mp) => {
+                {[...player.matchPlayers].sort((a, b) => new Date(b.match.date).getTime() - new Date(a.match.date).getTime()).map((mp) => {
                   const isCancelled = !!mp.match.cancelledAt;
                   return (
                     <div

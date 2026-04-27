@@ -1,4 +1,4 @@
-import type { Player, PlayerDetail } from "@/types/players";
+import type { Player, PlayerDetail, AtRiskResult } from "@/types/players";
 import { handle, type Result } from "@/services/shared";
 
 export async function getPlayers(): Promise<Result<Player[]>> {
@@ -32,4 +32,9 @@ export async function updatePlayer(id: string, name: string, phone?: string): Pr
 export async function deletePlayer(id: string): Promise<Result<{ success: true }>> {
   const res = await fetch(`/api/players/${id}`, { method: "DELETE" });
   return handle(res, "Oyuncu silinemedi");
+}
+
+export async function getAtRiskPlayers(): Promise<Result<AtRiskResult>> {
+  const res = await fetch("/api/players/at-risk");
+  return handle(res, "Risk listesi yüklenemedi");
 }

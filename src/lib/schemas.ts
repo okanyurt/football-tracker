@@ -9,7 +9,7 @@ export const LoginSchema = z.object({
 
 // ── Players ──────────────────────────────────────────────────────────────────
 
-const phoneRegex = /^[\d\s\-+().]+$/;
+const phoneRegex = /^[\d\s\-+().]*$/;
 
 export const CreatePlayerSchema = z.object({
   name: z.string().min(1, "Name is required").max(100).trim(),

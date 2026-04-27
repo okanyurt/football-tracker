@@ -4,20 +4,42 @@ import { CreatePlayerSchema, parseBody } from "@/lib/schemas";
 import { calculatePlayerBalance } from "@/lib/playerBalance";
 
 export async function GET() {
-  const players = await prisma.player.findMany({
-    where: { deletedAt: null },
-    include: {
-      matchPlayers: { include: { match: true } },
-      payments: true,
-    },
-    orderBy: { name: "asc" },
-  });
+  const [players, allMatches] = await Promise.all([
+    prisma.player.findMany({
+      where: { deletedAt: null },
+      include: {
+        matchPlayers: { include: { match: true } },
+        payments: true,
+      },
+      orderBy: { name: "asc" },
+    }),
+    prisma.match.findMany({
+      where: { deletedAt: null, cancelledAt: null },
+      select: { id: true },
+      orderBy: { date: "desc" },
+    }),
+  ]);
+
+  const allMatchIds = allMatches.map((m) => m.id);
 
   const playersWithBalance = players.map((player) => {
     const { balance, totalOwed, totalPaid, matchCount } = calculatePlayerBalance(
       player.matchPlayers,
       player.payments
     );
+
+    const attendedIds = new Set(
+      player.matchPlayers
+        .filter((mp) => !mp.match.cancelledAt && !mp.match.deletedAt)
+        .map((mp) => mp.matchId)
+    );
+
+    let missedStreak = 0;
+    for (const matchId of allMatchIds) {
+      if (attendedIds.has(matchId)) break;
+      missedStreak++;
+    }
+
     return {
       id: player.id,
       name: player.name,
@@ -27,6 +49,7 @@ export async function GET() {
       totalOwed,
       totalPaid,
       matchCount,
+      missedStreak,
     };
   });
 
