@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import Drawer from "@/components/Drawer";
 import Avatar from "@/components/Avatar";
-import { UserPlus, Pencil, Trash2 } from "lucide-react";
+import { UserPlus, Pencil, Trash2, ArrowDownUp } from "lucide-react";
 import { useToast } from "@/hooks/useToast";
 import type { Player } from "@/types/players";
 import { getPlayers, createPlayer, updatePlayer, deletePlayer } from "@/services/players";
@@ -17,6 +17,9 @@ export default function PlayersPage() {
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [saving, setSaving] = useState(false);
+  const [missedSort, setMissedSort] = useState<"none" | "desc" | "asc">("none");
+  const [balanceSort, setBalanceSort] = useState<"none" | "desc" | "asc">("none");
+  const [nameSort, setNameSort] = useState<"none" | "asc" | "desc">("none");
   const { showError, ToastEl } = useToast();
 
   const load = useCallback(async () => {
@@ -101,20 +104,69 @@ export default function PlayersPage() {
         </div>
       ) : (
         <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
-          <div className="px-5 py-4 border-b border-slate-100">
+          <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
             <h2 className="text-sm font-semibold text-slate-700">Tüm Oyuncular</h2>
+            <button
+              onClick={() => { setMissedSort((v) => v === "none" ? "desc" : v === "desc" ? "asc" : "none"); setBalanceSort("none"); setNameSort("none"); }}
+              className={`flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-lg border transition-colors ${
+                missedSort !== "none"
+                  ? "bg-red-50 border-red-200 text-red-600"
+                  : "border-slate-200 text-slate-500 hover:bg-slate-50"
+              }`}
+            >
+              <ArrowDownUp size={12} />
+              {missedSort === "desc" ? "Çok → Az" : missedSort === "asc" ? "Az → Çok" : "Eksik Maç"}
+            </button>
           </div>
           <table className="w-full">
             <thead className="bg-slate-50 border-b border-slate-100">
               <tr>
-                <th className="text-left px-5 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">İsim</th>
+                <th className="text-left px-5 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                  <button
+                    onClick={() => { setNameSort((v) => v === "none" ? "asc" : v === "asc" ? "desc" : "none"); setMissedSort("none"); setBalanceSort("none"); }}
+                    className={`inline-flex items-center gap-1 transition-colors ${nameSort !== "none" ? "text-slate-700" : "text-slate-400 hover:text-slate-600"}`}
+                  >
+                    <ArrowDownUp size={11} />
+                    {nameSort === "asc" ? "A → Z" : nameSort === "desc" ? "Z → A" : "İsim"}
+                  </button>
+                </th>
                 <th className="text-left px-5 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider hidden sm:table-cell">Telefon</th>
-                <th className="text-right px-5 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">Bakiye</th>
+                <th className="text-right px-5 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                  <button
+                    onClick={() => { setBalanceSort((v) => v === "none" ? "desc" : v === "desc" ? "asc" : "none"); setMissedSort("none"); }}
+                    className={`inline-flex items-center gap-1 ml-auto transition-colors ${balanceSort !== "none" ? "text-emerald-600" : "text-slate-400 hover:text-slate-600"}`}
+                  >
+                    <ArrowDownUp size={11} />
+                    {balanceSort === "desc" ? "Çok → Az" : balanceSort === "asc" ? "Az → Çok" : "Bakiye"}
+                  </button>
+                </th>
                 <th className="px-5 py-3" />
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {players.map((player) => (
+              {(() => {
+                if (missedSort !== "none") {
+                  return [...players].sort((a, b) => {
+                    if (missedSort === "desc") return b.missedStreak - a.missedStreak;
+                    if (a.missedStreak === 0 && b.missedStreak > 0) return 1;
+                    if (b.missedStreak === 0 && a.missedStreak > 0) return -1;
+                    return a.missedStreak - b.missedStreak;
+                  });
+                }
+                if (balanceSort !== "none") {
+                  return [...players].sort((a, b) =>
+                    balanceSort === "desc" ? b.balance - a.balance : a.balance - b.balance
+                  );
+                }
+                if (nameSort !== "none") {
+                  return [...players].sort((a, b) =>
+                    nameSort === "asc"
+                      ? a.name.localeCompare(b.name, "tr")
+                      : b.name.localeCompare(a.name, "tr")
+                  );
+                }
+                return players;
+              })().map((player) => (
                 <tr key={player.id} className="hover:bg-slate-50 transition-colors">
                   <td className="px-5 py-3.5">
                     <div className="flex items-center gap-3">
