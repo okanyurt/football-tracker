@@ -22,7 +22,9 @@ export const CreatePlayerSchema = z.object({
     .nullable(),
 });
 
-export const UpdatePlayerSchema = CreatePlayerSchema;
+export const UpdatePlayerSchema = CreatePlayerSchema.extend({
+  isExempt: z.boolean().optional(),
+});
 
 // ── Matches ───────────────────────────────────────────────────────────────────
 

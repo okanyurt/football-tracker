@@ -2,6 +2,7 @@ export interface Player {
   id: string;
   name: string;
   phone: string | null;
+  isExempt: boolean;
   balance: number;
   totalOwed: number;
   totalPaid: number;

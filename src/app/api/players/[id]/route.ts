@@ -42,12 +42,12 @@ export async function PUT(
     return NextResponse.json({ error: parsed.error }, { status: 400 });
   }
 
-  const { name, phone } = parsed.data;
+  const { name, phone, isExempt } = parsed.data;
 
   try {
     const player = await prisma.player.update({
       where: { id, deletedAt: null },
-      data: { name, phone: phone?.trim() || null },
+      data: { name, phone: phone?.trim() || null, ...(isExempt !== undefined && { isExempt }) },
     });
     return NextResponse.json(player);
   } catch (e) {

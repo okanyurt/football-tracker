@@ -35,15 +35,18 @@ export async function GET() {
     );
 
     let missedStreak = 0;
-    for (const matchId of allMatchIds) {
-      if (attendedIds.has(matchId)) break;
-      missedStreak++;
+    if (!player.isExempt) {
+      for (const matchId of allMatchIds) {
+        if (attendedIds.has(matchId)) break;
+        missedStreak++;
+      }
     }
 
     return {
       id: player.id,
       name: player.name,
       phone: player.phone,
+      isExempt: player.isExempt,
       createdAt: player.createdAt,
       balance,
       totalOwed,

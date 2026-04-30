@@ -20,11 +20,11 @@ export async function createPlayer(name: string, phone?: string): Promise<Result
   return handle(res, "Oyuncu eklenemedi");
 }
 
-export async function updatePlayer(id: string, name: string, phone?: string): Promise<Result<Player>> {
+export async function updatePlayer(id: string, name: string, phone?: string, isExempt?: boolean): Promise<Result<Player>> {
   const res = await fetch(`/api/players/${id}`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ name, phone }),
+    body: JSON.stringify({ name, phone, isExempt }),
   });
   return handle(res, "Oyuncu güncellenemedi");
 }

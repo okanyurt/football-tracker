@@ -16,6 +16,7 @@ export default function PlayersPage() {
   const [editPlayer, setEditPlayer] = useState<Player | null>(null);
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
+  const [isExempt, setIsExempt] = useState(false);
   const [saving, setSaving] = useState(false);
   const [missedSort, setMissedSort] = useState<"none" | "desc" | "asc">("none");
   const [balanceSort, setBalanceSort] = useState<"none" | "desc" | "asc">("none");
@@ -36,6 +37,7 @@ export default function PlayersPage() {
   const openAdd = () => {
     setName("");
     setPhone("");
+    setIsExempt(false);
     setShowAdd(true);
   };
 
@@ -43,13 +45,14 @@ export default function PlayersPage() {
     setEditPlayer(player);
     setName(player.name);
     setPhone(player.phone || "");
+    setIsExempt(player.isExempt);
   };
 
   const handleSave = async () => {
     if (!name.trim()) return;
     setSaving(true);
     if (editPlayer) {
-      const { error } = await updatePlayer(editPlayer.id, name, phone);
+      const { error } = await updatePlayer(editPlayer.id, name, phone, isExempt);
       setSaving(false);
       if (error) { showError(error); return; }
       setEditPlayer(null);
@@ -180,7 +183,12 @@ export default function PlayersPage() {
                         <Link href={`/players/${player.id}`} className="font-medium text-slate-800 hover:text-emerald-600 transition-colors">
                           {player.name}
                         </Link>
-                        {player.missedStreak > 0 && (
+                        {player.isExempt && (
+                          <span className="text-[11px] font-bold bg-blue-100 text-blue-600 px-1.5 py-0.5 rounded-md leading-none">
+                            Muaf
+                          </span>
+                        )}
+                        {!player.isExempt && player.missedStreak > 0 && (
                           <span className="text-[11px] font-bold bg-red-100 text-red-600 px-1.5 py-0.5 rounded-md leading-none">
                             -{player.missedStreak} maç
                           </span>

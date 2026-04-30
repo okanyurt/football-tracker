@@ -16,7 +16,7 @@ export async function GET() {
   const recentMatchIds = recentMatches.map((m) => m.id);
 
   const players = await prisma.player.findMany({
-    where: { deletedAt: null },
+    where: { deletedAt: null, isExempt: false },
     select: {
       id: true,
       name: true,
