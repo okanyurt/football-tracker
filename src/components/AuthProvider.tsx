@@ -1,24 +1,22 @@
-"use client";
-
 import { useEffect, useRef, useCallback } from "react";
-import { useRouter, usePathname } from "next/navigation";
+import { useLocation, useNavigate } from "react-router-dom";
 import Sidebar from "@/components/Sidebar";
 
 const REFRESH_INTERVAL_MS = 14 * 60 * 1000; // 14 minutes — refresh before 15-min expiry
 const PUBLIC_PATHS = ["/login"];
 
 export default function AuthProvider({ children }: { children: React.ReactNode }) {
-  const router = useRouter();
-  const pathname = usePathname();
+  const navigate = useNavigate();
+  const { pathname } = useLocation();
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const isPublic = PUBLIC_PATHS.includes(pathname);
 
   const logout = useCallback(() => {
     fetch("/api/auth/logout", { method: "POST" }).finally(() => {
-      router.replace("/login");
+      navigate("/login", { replace: true });
     });
-  }, [router]);
+  }, [navigate]);
 
   const scheduleRefresh = useCallback(() => {
     if (timerRef.current) clearTimeout(timerRef.current);

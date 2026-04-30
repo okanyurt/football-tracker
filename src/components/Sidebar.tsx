@@ -1,7 +1,5 @@
-"use client";
-
-import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { Link } from "react-router-dom";
+import { useLocation } from "react-router-dom";
 import { LayoutDashboard, Users, CalendarDays, LogOut } from "lucide-react";
 
 const navItems = [
@@ -11,14 +9,14 @@ const navItems = [
 ];
 
 export default function Sidebar({ onLogout }: { onLogout?: () => void }) {
-  const pathname = usePathname();
+  const { pathname } = useLocation();
 
   return (
     <>
       {/* Desktop Sidebar */}
       <aside className="fixed inset-y-0 left-0 w-60 bg-slate-900 flex-col z-30 hidden md:flex">
         <div className="px-5 py-5 border-b border-slate-800">
-          <Link href="/" className="flex items-center gap-3">
+          <Link to="/" className="flex items-center gap-3">
             <div className="w-9 h-9 bg-emerald-500 rounded-xl flex items-center justify-center text-lg shadow-lg">
               ⚽
             </div>
@@ -35,7 +33,7 @@ export default function Sidebar({ onLogout }: { onLogout?: () => void }) {
             return (
               <Link
                 key={href}
-                href={href}
+                to={href}
                 className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
                   isActive
                     ? "bg-emerald-500/10 text-emerald-400"
@@ -70,7 +68,7 @@ export default function Sidebar({ onLogout }: { onLogout?: () => void }) {
           return (
             <Link
               key={href}
-              href={href}
+              to={href}
               className={`flex-1 flex flex-col items-center gap-1 py-3 text-xs font-medium transition-colors ${
                 isActive ? "text-emerald-400" : "text-slate-500"
               }`}
