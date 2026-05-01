@@ -24,6 +24,7 @@ export const CreatePlayerSchema = z.object({
 
 export const UpdatePlayerSchema = CreatePlayerSchema.extend({
   isExempt: z.boolean().optional(),
+  positions: z.string().max(20).optional(),
 });
 
 // ── Matches ───────────────────────────────────────────────────────────────────
@@ -56,6 +57,17 @@ export const AddParticipantsSchema = z.object({
 
 export const RemoveParticipantSchema = z.object({
   playerId: z.string().cuid("Invalid player id"),
+});
+
+// ── Match Ratings ─────────────────────────────────────────────────────────────
+
+export const SubmitRatingsSchema = z.object({
+  raterName: z.string().min(1, "Puanlayan adı gerekli").max(50).trim(),
+  ratings: z.record(z.string(), z.number().int().min(1).max(10)),
+});
+
+export const DeleteRaterSchema = z.object({
+  raterName: z.string().min(1).max(50).trim(),
 });
 
 // ── Match Teams ───────────────────────────────────────────────────────────────

@@ -23,15 +23,17 @@ import {
   CreateMatchSchema,
   CreatePaymentSchema,
   CreatePlayerSchema,
+  DeleteRaterSchema,
   LoginSchema,
   RemoveParticipantSchema,
+  SubmitRatingsSchema,
   UpdatePlayerSchema,
   UpdateTeamsSchema,
   parseBody,
 } from "@/lib/schemas";
 
 const app = express();
-const port = Number(process.env.API_PORT ?? 3001);
+const port = Number(process.env.API_PORT ?? 3000);
 const MAX_FAILED_ATTEMPTS = 5;
 const LOCKOUT_DURATION_MS = 15 * 60 * 1000;
 const DUMMY_HASH = "$2b$12$dummyhashfortimingprotection000000000000000000000000u";
@@ -75,7 +77,7 @@ function getClientIp(req: Request): string {
   if (forwarded) return forwarded.split(",")[0].trim();
   const realIp = req.header("x-real-ip");
   if (realIp) return realIp;
-  return req.ip === "::1" ? "127.0.0.1" : req.ip;
+  return req.ip === "::1" ? "127.0.0.1" : (req.ip ?? "unknown");
 }
 
 function csrfCheck(req: Request): boolean {
@@ -286,6 +288,7 @@ app.get(
         name: player.name,
         phone: player.phone,
         isExempt: player.isExempt,
+        positions: player.positions,
         createdAt: player.createdAt,
         balance,
         totalOwed,
@@ -396,10 +399,15 @@ app.put(
       return;
     }
 
-    const { name, phone, isExempt } = parsed.data;
+    const { name, phone, isExempt, positions } = parsed.data;
     const player = await prisma.player.update({
       where: { id: req.params.id },
-      data: { name, phone: phone?.trim() || null, ...(isExempt !== undefined && { isExempt }) },
+      data: {
+        name,
+        phone: phone?.trim() || null,
+        ...(isExempt !== undefined && { isExempt }),
+        ...(positions !== undefined && { positions }),
+      },
     });
     res.json(player);
   })
@@ -681,6 +689,187 @@ app.delete(
   })
 );
 
+// ── Match Ratings ─────────────────────────────────────────────────────────────
+
+function buildRatingData(
+  matchPlayers: { playerId: string; player: { id: string; name: string } }[],
+  allRatings: { playerId: string; raterName: string; rating: number }[]
+) {
+  const raterSet = new Set(allRatings.map((r) => r.raterName));
+  const players = matchPlayers.map(({ playerId, player }) => {
+    const pr = allRatings.filter((r) => r.playerId === playerId);
+    const avg = pr.length > 0 ? pr.reduce((s, r) => s + r.rating, 0) / pr.length : 0;
+    return {
+      playerId,
+      playerName: player.name,
+      average: Math.round(avg * 10) / 10,
+      count: pr.length,
+      ratings: pr.map((r) => ({ raterName: r.raterName, rating: r.rating })),
+    };
+  });
+  players.sort((a, b) => b.average - a.average);
+  return { raters: Array.from(raterSet), players };
+}
+
+app.get(
+  "/api/matches/:id/ratings",
+  asyncRoute(async (req, res) => {
+    const match = await prisma.match.findFirst({
+      where: { id: req.params.id, deletedAt: null },
+      include: { matchPlayers: { include: { player: true } } },
+    });
+    if (!match) { res.status(404).json({ error: "Maç bulunamadı" }); return; }
+
+    const allRatings = await prisma.playerRating.findMany({
+      where: { matchId: req.params.id },
+      orderBy: { createdAt: "asc" },
+    });
+    res.json(buildRatingData(match.matchPlayers, allRatings));
+  })
+);
+
+app.post(
+  "/api/matches/:id/ratings",
+  asyncRoute(async (req, res) => {
+    const parsed = parseBody(SubmitRatingsSchema, req.body);
+    if (!parsed.ok) { res.status(400).json({ error: parsed.error }); return; }
+
+    const match = await prisma.match.findFirst({
+      where: { id: req.params.id, deletedAt: null },
+      include: { matchPlayers: { include: { player: true } } },
+    });
+    if (!match) { res.status(404).json({ error: "Maç bulunamadı" }); return; }
+
+    const { raterName, ratings } = parsed.data;
+    const validPlayerIds = new Set(match.matchPlayers.map((mp) => mp.playerId));
+    const upserts = Object.entries(ratings)
+      .filter(([pid]) => validPlayerIds.has(pid))
+      .map(([playerId, rating]) =>
+        prisma.playerRating.upsert({
+          where: { matchId_playerId_raterName: { matchId: req.params.id, playerId, raterName } },
+          create: { matchId: req.params.id, playerId, raterName, rating },
+          update: { rating },
+        })
+      );
+    await prisma.$transaction(upserts);
+
+    const allRatings = await prisma.playerRating.findMany({
+      where: { matchId: req.params.id },
+      orderBy: { createdAt: "asc" },
+    });
+    res.json(buildRatingData(match.matchPlayers, allRatings));
+  })
+);
+
+app.delete(
+  "/api/matches/:id/ratings",
+  asyncRoute(async (req, res) => {
+    const parsed = parseBody(DeleteRaterSchema, req.body);
+    if (!parsed.ok) { res.status(400).json({ error: parsed.error }); return; }
+
+    const match = await prisma.match.findFirst({
+      where: { id: req.params.id, deletedAt: null },
+      include: { matchPlayers: { include: { player: true } } },
+    });
+    if (!match) { res.status(404).json({ error: "Maç bulunamadı" }); return; }
+
+    await prisma.playerRating.deleteMany({
+      where: { matchId: req.params.id, raterName: parsed.data.raterName },
+    });
+
+    const allRatings = await prisma.playerRating.findMany({
+      where: { matchId: req.params.id },
+      orderBy: { createdAt: "asc" },
+    });
+    res.json(buildRatingData(match.matchPlayers, allRatings));
+  })
+);
+
+app.get(
+  "/api/matches/:id/suggest-teams",
+  asyncRoute(async (req, res) => {
+    const match = await prisma.match.findFirst({
+      where: { id: req.params.id, deletedAt: null },
+      include: { matchPlayers: { include: { player: true } } },
+    });
+    if (!match) { res.status(404).json({ error: "Maç bulunamadı" }); return; }
+
+    const playerIds = match.matchPlayers.map((mp) => mp.playerId);
+    const pastRatings = await prisma.playerRating.groupBy({
+      by: ["playerId"],
+      where: { playerId: { in: playerIds }, match: { deletedAt: null } },
+      _avg: { rating: true },
+    });
+
+    const avgMap: Record<string, number> = {};
+    for (const r of pastRatings) {
+      if (r._avg.rating != null) avgMap[r.playerId] = r._avg.rating;
+    }
+
+    const DEFAULT_RATING = 5;
+    const sorted = [...match.matchPlayers].sort((a, b) => {
+      return (avgMap[b.playerId] ?? DEFAULT_RATING) - (avgMap[a.playerId] ?? DEFAULT_RATING);
+    });
+
+    const getPos = (mp: (typeof sorted)[0]) =>
+      mp.player.positions ? mp.player.positions.split(",").filter(Boolean) : [];
+
+    const hasAnyPositions = match.matchPlayers.some((mp) => mp.player.positions);
+
+    const team1: string[] = [];
+    const team2: string[] = [];
+
+    const snakeDraft = (players: typeof sorted) => {
+      players.forEach((mp, i) => {
+        const round = Math.floor(i / 2);
+        const isT1Pick = round % 2 === 0 ? i % 2 === 0 : i % 2 === 1;
+        if (isT1Pick) team1.push(mp.playerId);
+        else team2.push(mp.playerId);
+      });
+    };
+
+    if (!hasAnyPositions) {
+      snakeDraft(sorted);
+    } else {
+      // GKs: round-robin so each team gets 1 (best GK → T1, next → T2, …)
+      const gks = sorted.filter((mp) => getPos(mp).includes("K"));
+      gks.forEach((mp, i) => {
+        if (i % 2 === 0) team1.push(mp.playerId);
+        else team2.push(mp.playerId);
+      });
+
+      // Field players: per-position snake drafts (D → O → F → unpositioned)
+      // Alternating which team starts each group to balance across groups
+      const field = sorted.filter((mp) => !getPos(mp).includes("K"));
+      const defs  = field.filter((mp) => getPos(mp).includes("D"));
+      const mids  = field.filter((mp) => !getPos(mp).includes("D") && getPos(mp).includes("O"));
+      const fwds  = field.filter((mp) => !getPos(mp).includes("D") && !getPos(mp).includes("O") && getPos(mp).includes("F"));
+      const none  = field.filter((mp) => getPos(mp).length === 0);
+
+      let t1Starts = true;
+      for (const group of [defs, mids, fwds, none]) {
+        if (group.length === 0) continue;
+        group.forEach((mp, i) => {
+          const round = Math.floor(i / 2);
+          const localFirst = round % 2 === 0 ? i % 2 === 0 : i % 2 === 1;
+          const goesT1 = t1Starts ? localFirst : !localFirst;
+          if (goesT1) team1.push(mp.playerId);
+          else team2.push(mp.playerId);
+        });
+        t1Starts = !t1Starts;
+      }
+    }
+
+    res.json({
+      team1,
+      team2,
+      playerRatings: Object.fromEntries(
+        match.matchPlayers.map((mp) => [mp.playerId, avgMap[mp.playerId] ?? DEFAULT_RATING])
+      ),
+    });
+  })
+);
+
 app.post(
   "/api/payments",
   asyncRoute(async (req, res) => {
@@ -749,19 +938,26 @@ app.delete(
   })
 );
 
-if (process.env.NODE_ENV === "production") {
-  const staticDir = path.resolve(process.cwd(), "dist");
-  app.use(express.static(staticDir));
-  app.get(/^(?!\/api).*/, (_req, res) => {
-    res.sendFile(path.join(staticDir, "index.html"));
-  });
-}
-
 app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
   console.error("[api]", err);
   res.status(500).json({ error: "Sunucu hatası" });
 });
 
-app.listen(port, () => {
-  console.log(`API server listening on http://localhost:${port}`);
-});
+async function startServer() {
+  if (process.env.NODE_ENV === "production") {
+    const staticDir = path.resolve(process.cwd(), "dist");
+    app.use(express.static(staticDir));
+    app.get(/^(?!\/api).*/, (_req, res) => {
+      res.sendFile(path.join(staticDir, "index.html"));
+    });
+    console.log(`\n  ➜  App: http://localhost:${port}/`);
+  } else {
+    console.log(`\n  ➜  App: http://localhost:3000/ (Vite)`);
+  }
+
+  app.listen(port, () => {
+    console.log(`  ➜  API: http://localhost:${port}/api`);
+  });
+}
+
+startServer();

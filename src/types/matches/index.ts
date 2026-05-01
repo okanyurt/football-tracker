@@ -53,3 +53,22 @@ export interface UpdateTeamsDto {
   team2Name: string;
   playerTeams: Record<string, 1 | 2>;
 }
+
+export interface PlayerRatingSummary {
+  playerId: string;
+  playerName: string;
+  average: number;
+  count: number;
+  ratings: { raterName: string; rating: number }[];
+}
+
+export interface MatchRatingData {
+  raters: string[];
+  players: PlayerRatingSummary[];
+}
+
+export interface SuggestTeamsResult {
+  team1: string[];
+  team2: string[];
+  playerRatings: Record<string, number>;
+}

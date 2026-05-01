@@ -3,6 +3,7 @@ export interface Player {
   name: string;
   phone: string | null;
   isExempt: boolean;
+  positions: string;
   balance: number;
   totalOwed: number;
   totalPaid: number;

@@ -1,4 +1,4 @@
-import type { MatchListItem, MatchDetail, CreateMatchDto, UpdateTeamsDto } from "@/types/matches";
+import type { MatchListItem, MatchDetail, CreateMatchDto, UpdateTeamsDto, MatchRatingData, SuggestTeamsResult } from "@/types/matches";
 import { handle, type Result } from "@/services/shared";
 
 export async function getMatches(): Promise<Result<MatchListItem[]>> {
@@ -50,4 +50,36 @@ export async function removeParticipant(matchId: string, playerId: string): Prom
     body: JSON.stringify({ playerId }),
   });
   return handle(res, "Oyuncu çıkarılamadı");
+}
+
+export async function getMatchRatings(matchId: string): Promise<Result<MatchRatingData>> {
+  const res = await fetch(`/api/matches/${matchId}/ratings`);
+  return handle(res, "Puanlar yüklenemedi");
+}
+
+export async function submitRatings(
+  matchId: string,
+  raterName: string,
+  ratings: Record<string, number>
+): Promise<Result<MatchRatingData>> {
+  const res = await fetch(`/api/matches/${matchId}/ratings`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ raterName, ratings }),
+  });
+  return handle(res, "Puanlar kaydedilemedi");
+}
+
+export async function deleteRater(matchId: string, raterName: string): Promise<Result<MatchRatingData>> {
+  const res = await fetch(`/api/matches/${matchId}/ratings`, {
+    method: "DELETE",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ raterName }),
+  });
+  return handle(res, "Puanlama silinemedi");
+}
+
+export async function suggestTeams(matchId: string): Promise<Result<SuggestTeamsResult>> {
+  const res = await fetch(`/api/matches/${matchId}/suggest-teams`);
+  return handle(res, "Takım önerisi alınamadı");
 }

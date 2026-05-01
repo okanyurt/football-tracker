@@ -1,15 +1,13 @@
 {
   "name": "football-tracker",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "private": true,
   "scripts": {
-    "dev": "concurrently \"npm:dev:api\" \"npm:dev:web\"",
-    "dev:web": "vite --host 0.0.0.0",
-    "dev:api": "tsx src/server/index.ts",
+    "dev": "concurrently \"API_PORT=3001 tsx src/server/index.ts\" \"vite\"",
     "build": "vite build",
     "preview": "vite preview --host 0.0.0.0",
     "postinstall": "prisma generate",
-    "start": "NODE_ENV=production API_PORT=3000 tsx src/server/index.ts",
+    "start": "NODE_ENV=production tsx src/server/index.ts",
     "db:push": "prisma db push",
     "db:studio": "prisma studio",
     "db:seed": "tsx prisma/seed.ts"

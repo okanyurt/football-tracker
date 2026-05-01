@@ -8,31 +8,34 @@ datasource db {
 }
 
 model Player {
-  id           String        @id @default(cuid())
-  name         String
-  phone        String?
-  isExempt     Boolean       @default(false)
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
-  deletedAt    DateTime?
-  matchPlayers MatchPlayer[]
-  payments     Payment[]
+  id            String         @id @default(cuid())
+  name          String
+  phone         String?
+  isExempt      Boolean        @default(false)
+  positions     String         @default("")
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  deletedAt     DateTime?
+  matchPlayers  MatchPlayer[]
+  payments      Payment[]
+  playerRatings PlayerRating[]
 }
 
 model Match {
-  id             String        @id @default(cuid())
-  date           DateTime
-  location       String?
-  totalCost      Float
-  notes          String?
-  cancelledAt    DateTime?
+  id            String         @id @default(cuid())
+  date          DateTime
+  location      String?
+  totalCost     Float
+  notes         String?
+  cancelledAt   DateTime?
   goalkeeperFree Boolean       @default(false)
-  createdAt      DateTime      @default(now())
-  updatedAt      DateTime      @updatedAt
-  team1Name      String?
-  team2Name      String?
-  deletedAt      DateTime?
-  matchPlayers   MatchPlayer[]
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  team1Name     String?
+  team2Name     String?
+  deletedAt     DateTime?
+  matchPlayers  MatchPlayer[]
+  playerRatings PlayerRating[]
 }
 
 model MatchPlayer {
@@ -46,6 +49,19 @@ model MatchPlayer {
   match        Match   @relation(fields: [matchId], references: [id], onDelete: Cascade)
 
   @@unique([matchId, playerId])
+}
+
+model PlayerRating {
+  id        String   @id @default(cuid())
+  matchId   String
+  playerId  String
+  raterName String
+  rating    Int
+  createdAt DateTime @default(now())
+  match     Match    @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  player    Player   @relation(fields: [playerId], references: [id], onDelete: Cascade)
+
+  @@unique([matchId, playerId, raterName])
 }
 
 model Payment {

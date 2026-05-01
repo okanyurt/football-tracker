@@ -2,18 +2,28 @@ import { useState, useEffect, useCallback } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Link } from "react-router-dom";
 import { format } from "date-fns";
-import { ArrowLeft, TrendingDown, TrendingUp, Shield, ArrowUpCircle, ArrowDownCircle } from "lucide-react";
+import { ArrowLeft, TrendingDown, TrendingUp, Shield, ArrowUpCircle, ArrowDownCircle, Pencil, Check, X } from "lucide-react";
 import Avatar from "@/components/Avatar";
 import { useToast } from "@/hooks/useToast";
 import type { PlayerDetail, PaymentEntry } from "@/types/players";
-import { getPlayer } from "@/services/players";
+import { getPlayer, updatePlayer } from "@/services/players";
 import { createPayment, toggleCancelPayment } from "@/services/payments";
+
+const POSITIONS = [
+  { code: "K", label: "Kaleci" },
+  { code: "D", label: "Defans" },
+  { code: "O", label: "Orta Saha" },
+  { code: "F", label: "Forvet" },
+] as const;
 
 export default function PlayerDetailPage() {
   const { id = "" } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [player, setPlayer] = useState<PlayerDetail | null>(null);
   const [loading, setLoading] = useState(true);
+  const [editingPositions, setEditingPositions] = useState(false);
+  const [selectedPositions, setSelectedPositions] = useState<string[]>([]);
+  const [savingPositions, setSavingPositions] = useState(false);
   const { showError, ToastEl } = useToast();
 
   const load = useCallback(async () => {
@@ -24,6 +34,28 @@ export default function PlayerDetailPage() {
   }, [id, navigate]);
 
   useEffect(() => { load(); }, [load]);
+
+  const openPositionEdit = () => {
+    if (!player) return;
+    setSelectedPositions(player.positions ? player.positions.split(",").filter(Boolean) : []);
+    setEditingPositions(true);
+  };
+
+  const togglePosition = (code: string) => {
+    setSelectedPositions((prev) =>
+      prev.includes(code) ? prev.filter((c) => c !== code) : [...prev, code]
+    );
+  };
+
+  const savePositions = async () => {
+    if (!player) return;
+    setSavingPositions(true);
+    const { error } = await updatePlayer(player.id, player.name, player.phone ?? undefined, player.isExempt, selectedPositions.join(","));
+    setSavingPositions(false);
+    if (error) { showError(error); return; }
+    setEditingPositions(false);
+    load();
+  };
 
   const handleCancelPayment = async (payment: PaymentEntry) => {
     const msg = payment.cancelledAt ? "Bu ödemeyi geri al?" : "Bu ödemeyi iptal et?";
@@ -83,6 +115,53 @@ export default function PlayerDetailPage() {
               {player.balance < 0 ? "-" : player.balance > 0 ? "+" : ""}₺{Math.abs(player.balance).toFixed(0)}
             </p>
           </div>
+        </div>
+      </div>
+
+      {/* Positions */}
+      <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
+        <div className="px-5 py-3.5 flex items-center justify-between">
+          <span className="text-sm font-semibold text-slate-700">Pozisyon</span>
+          {!editingPositions ? (
+            <button onClick={openPositionEdit} className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-slate-600">
+              <Pencil size={12} />
+              Düzenle
+            </button>
+          ) : (
+            <div className="flex items-center gap-2">
+              <button onClick={() => setEditingPositions(false)} className="p-1 text-slate-400 hover:text-slate-600"><X size={14} /></button>
+              <button onClick={savePositions} disabled={savingPositions} className="flex items-center gap-1 text-xs bg-emerald-600 text-white px-2.5 py-1 rounded-lg hover:bg-emerald-700 disabled:opacity-50">
+                <Check size={12} />
+                {savingPositions ? "..." : "Kaydet"}
+              </button>
+            </div>
+          )}
+        </div>
+        <div className="px-5 pb-4 flex gap-2 flex-wrap">
+          {POSITIONS.map(({ code, label }) => {
+            const currentCodes = editingPositions
+              ? selectedPositions
+              : (player.positions ? player.positions.split(",").filter(Boolean) : []);
+            const active = currentCodes.includes(code);
+            return (
+              <button
+                key={code}
+                type="button"
+                onClick={editingPositions ? () => togglePosition(code) : undefined}
+                disabled={!editingPositions}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border transition-colors ${
+                  active
+                    ? "bg-emerald-600 text-white border-emerald-600"
+                    : editingPositions
+                    ? "bg-slate-50 text-slate-400 border-slate-200 hover:border-slate-300 hover:text-slate-600"
+                    : "bg-slate-100 text-slate-400 border-slate-200 cursor-default"
+                }`}
+              >
+                <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-bold ${active ? "bg-white/20" : "bg-slate-200 text-slate-500"}`}>{code}</span>
+                {label}
+              </button>
+            );
+          })}
         </div>
       </div>
 
