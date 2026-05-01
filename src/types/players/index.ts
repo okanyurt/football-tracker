@@ -3,12 +3,14 @@ export interface Player {
   name: string;
   phone: string | null;
   isExempt: boolean;
+  removedFromGroup: boolean;
   positions: string;
   balance: number;
   totalOwed: number;
   totalPaid: number;
   matchCount: number;
   missedStreak: number;
+  avgRating: number | null;
 }
 
 export interface MatchPlayerEntry {

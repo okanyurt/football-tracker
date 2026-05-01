@@ -29,6 +29,21 @@ export async function updatePlayer(id: string, name: string, phone?: string, isE
   return handle(res, "Oyuncu güncellenemedi");
 }
 
+export async function toggleRemovedFromGroup(player: Player): Promise<Result<Player>> {
+  const res = await fetch(`/api/players/${player.id}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      name: player.name,
+      phone: player.phone,
+      isExempt: player.isExempt,
+      positions: player.positions,
+      removedFromGroup: !player.removedFromGroup,
+    }),
+  });
+  return handle(res, "Oyuncu güncellenemedi");
+}
+
 export async function deletePlayer(id: string): Promise<Result<{ success: true }>> {
   const res = await fetch(`/api/players/${id}`, { method: "DELETE" });
   return handle(res, "Oyuncu silinemedi");

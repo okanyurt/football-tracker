@@ -11,8 +11,9 @@ model Player {
   id            String         @id @default(cuid())
   name          String
   phone         String?
-  isExempt      Boolean        @default(false)
-  positions     String         @default("")
+  isExempt          Boolean        @default(false)
+  removedFromGroup  Boolean        @default(false)
+  positions         String         @default("")
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
   deletedAt     DateTime?

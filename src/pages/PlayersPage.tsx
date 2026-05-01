@@ -2,10 +2,10 @@ import { useState, useEffect, useCallback } from "react";
 import { Link } from "react-router-dom";
 import Drawer from "@/components/Drawer";
 import Avatar from "@/components/Avatar";
-import { UserPlus, Pencil, Trash2, ArrowDownUp } from "lucide-react";
+import { UserPlus, Pencil, Trash2, ArrowDownUp, UserX } from "lucide-react";
 import { useToast } from "@/hooks/useToast";
 import type { Player } from "@/types/players";
-import { getPlayers, createPlayer, updatePlayer, deletePlayer } from "@/services/players";
+import { getPlayers, createPlayer, updatePlayer, deletePlayer, toggleRemovedFromGroup } from "@/services/players";
 
 export default function PlayersPage() {
   const [players, setPlayers] = useState<Player[]>([]);
@@ -66,6 +66,12 @@ export default function PlayersPage() {
   const handleDelete = async (id: string, playerName: string) => {
     if (!confirm(`"${playerName}" silinsin mi? Tüm geçmişi de silinecek.`)) return;
     const { error } = await deletePlayer(id);
+    if (error) { showError(error); return; }
+    load();
+  };
+
+  const handleToggleRemoved = async (player: Player) => {
+    const { error } = await toggleRemovedFromGroup(player);
     if (error) { showError(error); return; }
     load();
   };
@@ -131,6 +137,8 @@ export default function PlayersPage() {
                     {nameSort === "asc" ? "A → Z" : nameSort === "desc" ? "Z → A" : "İsim"}
                   </button>
                 </th>
+                <th className="text-left px-5 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider hidden sm:table-cell">Mevki</th>
+                <th className="text-center px-3 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider hidden sm:table-cell">Ort.</th>
                 <th className="text-left px-5 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider hidden sm:table-cell">Telefon</th>
                 <th className="text-right px-5 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">
                   <button
@@ -168,7 +176,7 @@ export default function PlayersPage() {
                 }
                 return players;
               })().map((player) => (
-                <tr key={player.id} className="hover:bg-slate-50 transition-colors">
+                <tr key={player.id} className={`transition-colors ${player.removedFromGroup ? "bg-red-50 hover:bg-red-100" : "hover:bg-slate-50"}`}>
                   <td className="px-5 py-3.5">
                     <div className="flex items-center gap-3">
                       <div className="relative">
@@ -186,13 +194,42 @@ export default function PlayersPage() {
                             Muaf
                           </span>
                         )}
-                        {!player.isExempt && player.missedStreak > 0 && (
+                        {player.removedFromGroup && (
+                          <span className="text-[11px] font-bold bg-slate-200 text-slate-500 px-1.5 py-0.5 rounded-md leading-none">
+                            Gruptan Çıktı
+                          </span>
+                        )}
+                        {!player.isExempt && !player.removedFromGroup && player.missedStreak > 0 && (
                           <span className="text-[11px] font-bold bg-red-100 text-red-600 px-1.5 py-0.5 rounded-md leading-none">
                             -{player.missedStreak} maç
                           </span>
                         )}
                       </div>
                     </div>
+                  </td>
+                  <td className="px-5 py-3.5 hidden sm:table-cell">
+                    {player.positions
+                      ? player.positions.split(",").filter(Boolean).map((p) => (
+                          <span key={p} className="inline-block text-[11px] font-bold bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded-md mr-1">
+                            {p}
+                          </span>
+                        ))
+                      : <span className="text-slate-300 text-sm">—</span>
+                    }
+                  </td>
+                  <td className="px-3 py-3.5 text-center hidden sm:table-cell">
+                    {player.avgRating != null ? (
+                      <span className={`inline-flex items-center justify-center w-10 h-8 rounded-xl text-sm font-bold border ${
+                        player.avgRating >= 8 ? "bg-emerald-50 text-emerald-700 border-emerald-200" :
+                        player.avgRating >= 6 ? "bg-blue-50 text-blue-700 border-blue-200" :
+                        player.avgRating >= 4 ? "bg-orange-50 text-orange-700 border-orange-200" :
+                        "bg-red-50 text-red-600 border-red-200"
+                      }`}>
+                        {player.avgRating % 1 === 0 ? player.avgRating : player.avgRating.toFixed(1)}
+                      </span>
+                    ) : (
+                      <span className="text-slate-300 text-sm">—</span>
+                    )}
                   </td>
                   <td className="px-5 py-3.5 text-slate-400 text-sm hidden sm:table-cell">
                     {player.phone || "—"}
@@ -218,6 +255,17 @@ export default function PlayersPage() {
                         title="Düzenle"
                       >
                         <Pencil size={14} />
+                      </button>
+                      <button
+                        onClick={() => handleToggleRemoved(player)}
+                        className={`p-1.5 rounded-lg transition-colors ${
+                          player.removedFromGroup
+                            ? "text-slate-500 bg-slate-100 hover:text-slate-700"
+                            : "text-slate-400 hover:text-slate-600 hover:bg-slate-100"
+                        }`}
+                        title={player.removedFromGroup ? "Gruba geri al" : "Gruptan çıkart"}
+                      >
+                        <UserX size={14} />
                       </button>
                       <button
                         onClick={() => handleDelete(player.id, player.name)}

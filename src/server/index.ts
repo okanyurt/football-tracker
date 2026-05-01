@@ -246,7 +246,7 @@ app.post(
 app.get(
   "/api/players",
   asyncRoute(async (_req, res) => {
-    const [players, allMatches] = await Promise.all([
+    const [players, allMatches, ratingGroups] = await Promise.all([
       prisma.player.findMany({
         where: { deletedAt: null },
         include: {
@@ -260,7 +260,17 @@ app.get(
         select: { id: true },
         orderBy: { date: "desc" },
       }),
+      prisma.playerRating.groupBy({
+        by: ["playerId"],
+        where: { match: { deletedAt: null } },
+        _avg: { rating: true },
+        _count: { rating: true },
+      }),
     ]);
+
+    const ratingMap = new Map(
+      ratingGroups.map((r) => [r.playerId, r._avg.rating])
+    );
 
     const allMatchIds = allMatches.map((m) => m.id);
     const playersWithBalance = players.map((player) => {
@@ -276,18 +286,22 @@ app.get(
       );
 
       let missedStreak = 0;
-      if (!player.isExempt) {
+      if (!player.isExempt && !player.removedFromGroup) {
         for (const matchId of allMatchIds) {
           if (attendedIds.has(matchId)) break;
           missedStreak++;
         }
       }
 
+      const raw = ratingMap.get(player.id);
+      const avgRating = raw != null ? Math.round(raw * 10) / 10 : null;
+
       return {
         id: player.id,
         name: player.name,
         phone: player.phone,
         isExempt: player.isExempt,
+        removedFromGroup: player.removedFromGroup,
         positions: player.positions,
         createdAt: player.createdAt,
         balance,
@@ -295,6 +309,7 @@ app.get(
         totalPaid,
         matchCount,
         missedStreak,
+        avgRating,
       };
     });
 
@@ -399,13 +414,14 @@ app.put(
       return;
     }
 
-    const { name, phone, isExempt, positions } = parsed.data;
+    const { name, phone, isExempt, removedFromGroup, positions } = parsed.data;
     const player = await prisma.player.update({
       where: { id: req.params.id },
       data: {
         name,
         phone: phone?.trim() || null,
         ...(isExempt !== undefined && { isExempt }),
+        ...(removedFromGroup !== undefined && { removedFromGroup }),
         ...(positions !== undefined && { positions }),
       },
     });
@@ -814,8 +830,6 @@ app.get(
     const getPos = (mp: (typeof sorted)[0]) =>
       mp.player.positions ? mp.player.positions.split(",").filter(Boolean) : [];
 
-    const hasAnyPositions = match.matchPlayers.some((mp) => mp.player.positions);
-
     const team1: string[] = [];
     const team2: string[] = [];
 
@@ -828,24 +842,24 @@ app.get(
       });
     };
 
-    if (!hasAnyPositions) {
-      snakeDraft(sorted);
+    // GKs: maçta isGoalkeeper olarak işaretlenenler → her takıma 1 (en iyi → T1)
+    const gks = sorted.filter((mp) => mp.isGoalkeeper);
+    gks.forEach((mp, i) => {
+      if (i % 2 === 0) team1.push(mp.playerId);
+      else team2.push(mp.playerId);
+    });
+
+    // Saha oyuncuları: positions alanına göre D → O → F → mevkisiz gruplara ayrılır
+    const field = sorted.filter((mp) => !mp.isGoalkeeper);
+    const defs  = field.filter((mp) => getPos(mp).includes("D"));
+    const mids  = field.filter((mp) => !getPos(mp).includes("D") && getPos(mp).includes("O"));
+    const fwds  = field.filter((mp) => !getPos(mp).includes("D") && !getPos(mp).includes("O") && getPos(mp).includes("F"));
+    const none  = field.filter((mp) => getPos(mp).length === 0);
+
+    // Eğer hiç mevki tanımlanmamışsa tüm saha oyuncuları tek havuzda snake draft
+    if (defs.length === 0 && mids.length === 0 && fwds.length === 0) {
+      snakeDraft(field);
     } else {
-      // GKs: round-robin so each team gets 1 (best GK → T1, next → T2, …)
-      const gks = sorted.filter((mp) => getPos(mp).includes("K"));
-      gks.forEach((mp, i) => {
-        if (i % 2 === 0) team1.push(mp.playerId);
-        else team2.push(mp.playerId);
-      });
-
-      // Field players: per-position snake drafts (D → O → F → unpositioned)
-      // Alternating which team starts each group to balance across groups
-      const field = sorted.filter((mp) => !getPos(mp).includes("K"));
-      const defs  = field.filter((mp) => getPos(mp).includes("D"));
-      const mids  = field.filter((mp) => !getPos(mp).includes("D") && getPos(mp).includes("O"));
-      const fwds  = field.filter((mp) => !getPos(mp).includes("D") && !getPos(mp).includes("O") && getPos(mp).includes("F"));
-      const none  = field.filter((mp) => getPos(mp).length === 0);
-
       let t1Starts = true;
       for (const group of [defs, mids, fwds, none]) {
         if (group.length === 0) continue;

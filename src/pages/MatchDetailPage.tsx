@@ -284,15 +284,14 @@ export default function MatchDetailPage() {
                 {matchRatings.players.map((p, idx) => {
                   const isTop = p.playerId === topPlayerId;
                   return (
-                    <div key={p.playerId} className={`flex items-center gap-3 px-2 py-1 rounded-xl -mx-2 transition-colors ${isTop ? "bg-red-50 border border-red-200" : ""}`}>
+                    <div key={p.playerId} className={`flex items-center gap-3 px-2 py-1 rounded-xl -mx-2 transition-colors ${isTop ? "bg-emerald-50 border border-emerald-200" : ""}`}>
                       <span className="text-xs text-slate-300 w-4 text-right">{idx + 1}</span>
                       <Avatar name={p.playerName} size="sm" />
-                      <span className={`text-sm font-medium flex-1 ${isTop ? "text-red-700" : "text-slate-700"}`}>{p.playerName}</span>
+                      <span className={`text-sm font-medium flex-1 ${isTop ? "text-emerald-700" : "text-slate-700"}`}>{p.playerName}</span>
                       {p.count > 0 ? (
                         <div className="flex items-center gap-1.5">
-                          <span className="text-xs text-slate-400">{p.count} kişi</span>
                           <span className={`inline-flex items-center justify-center w-10 h-8 rounded-xl text-sm font-bold border ${
-                            isTop ? "bg-red-500 text-white border-red-600" :
+                            isTop ? "bg-emerald-500 text-white border-emerald-600" :
                             p.average >= 8 ? "bg-emerald-50 text-emerald-700 border-emerald-200" :
                             p.average >= 6 ? "bg-blue-50 text-blue-700 border-blue-200" :
                             p.average >= 4 ? "bg-orange-50 text-orange-700 border-orange-200" :
@@ -300,7 +299,7 @@ export default function MatchDetailPage() {
                           }`}>
                             {p.average % 1 === 0 ? p.average : p.average.toFixed(1)}
                           </span>
-                          {isTop && <Star size={13} className="text-red-500 fill-red-400" />}
+                          {isTop && <Star size={13} className="text-emerald-500 fill-emerald-400" />}
                         </div>
                       ) : (
                         <span className="text-slate-300 text-sm">—</span>
@@ -414,16 +413,16 @@ export default function MatchDetailPage() {
                     const avg = matchRatings?.players.find((p) => p.playerId === mp.playerId);
                     const isTop = mp.playerId === topPlayerId;
                     return (
-                      <div key={mp.id} className={`flex items-center gap-2.5 px-2 py-1.5 rounded-lg border ${isTop ? "bg-red-50 border-red-200" : "bg-white border-blue-100"}`}>
+                      <div key={mp.id} className={`flex items-center gap-2.5 px-2 py-1.5 rounded-lg border ${isTop ? "bg-emerald-50 border-emerald-200" : "bg-white border-blue-100"}`}>
                         <Avatar name={mp.player.name} size="sm" />
                         <span className="text-sm font-medium text-slate-700 flex-1">{mp.player.name}</span>
                         {mp.isGoalkeeper && <span className="text-[10px] font-bold bg-yellow-100 text-yellow-700 border border-yellow-200 px-1.5 py-0.5 rounded-md">GK</span>}
                         {avg && avg.count > 0 && (
                           <div className="flex items-center gap-1">
-                            <span className={`text-[11px] font-bold border px-1.5 py-0.5 rounded-md ${isTop ? "bg-red-500 text-white border-red-600" : "bg-violet-100 text-violet-700 border-violet-200"}`}>
+                            <span className={`text-[11px] font-bold border px-1.5 py-0.5 rounded-md ${isTop ? "bg-emerald-500 text-white border-emerald-600" : "bg-violet-100 text-violet-700 border-violet-200"}`}>
                               {avg.average % 1 === 0 ? avg.average : avg.average.toFixed(1)}
                             </span>
-                            {isTop && <Star size={11} className="text-red-500 fill-red-400" />}
+                            {isTop && <Star size={11} className="text-emerald-500 fill-emerald-400" />}
                           </div>
                         )}
                       </div>
@@ -452,16 +451,16 @@ export default function MatchDetailPage() {
                     const avg = matchRatings?.players.find((p) => p.playerId === mp.playerId);
                     const isTop = mp.playerId === topPlayerId;
                     return (
-                      <div key={mp.id} className={`flex items-center gap-2.5 px-2 py-1.5 rounded-lg border ${isTop ? "bg-red-50 border-red-200" : "bg-white border-orange-100"}`}>
+                      <div key={mp.id} className={`flex items-center gap-2.5 px-2 py-1.5 rounded-lg border ${isTop ? "bg-emerald-50 border-emerald-200" : "bg-white border-orange-100"}`}>
                         <Avatar name={mp.player.name} size="sm" />
                         <span className="text-sm font-medium text-slate-700 flex-1">{mp.player.name}</span>
                         {mp.isGoalkeeper && <span className="text-[10px] font-bold bg-yellow-100 text-yellow-700 border border-yellow-200 px-1.5 py-0.5 rounded-md">GK</span>}
                         {avg && avg.count > 0 && (
                           <div className="flex items-center gap-1">
-                            <span className={`text-[11px] font-bold border px-1.5 py-0.5 rounded-md ${isTop ? "bg-red-500 text-white border-red-600" : "bg-violet-100 text-violet-700 border-violet-200"}`}>
+                            <span className={`text-[11px] font-bold border px-1.5 py-0.5 rounded-md ${isTop ? "bg-emerald-500 text-white border-emerald-600" : "bg-violet-100 text-violet-700 border-violet-200"}`}>
                               {avg.average % 1 === 0 ? avg.average : avg.average.toFixed(1)}
                             </span>
-                            {isTop && <Star size={11} className="text-red-500 fill-red-400" />}
+                            {isTop && <Star size={11} className="text-emerald-500 fill-emerald-400" />}
                           </div>
                         )}
                       </div>

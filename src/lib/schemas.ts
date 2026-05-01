@@ -24,6 +24,7 @@ export const CreatePlayerSchema = z.object({
 
 export const UpdatePlayerSchema = CreatePlayerSchema.extend({
   isExempt: z.boolean().optional(),
+  removedFromGroup: z.boolean().optional(),
   positions: z.string().max(20).optional(),
 });
 
