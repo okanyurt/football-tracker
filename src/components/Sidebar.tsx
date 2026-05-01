@@ -17,9 +17,7 @@ export default function Sidebar({ onLogout }: { onLogout?: () => void }) {
       <aside className="fixed inset-y-0 left-0 w-60 bg-slate-900 flex-col z-30 hidden md:flex">
         <div className="px-5 py-5 border-b border-slate-800">
           <Link to="/" className="flex items-center gap-3">
-            <div className="w-9 h-9 bg-emerald-500 rounded-xl flex items-center justify-center text-lg shadow-lg">
-              ⚽
-            </div>
+            <img src="/favicon.svg" alt="logo" className="w-9 h-9 rounded-xl shadow-lg" />
             <div>
               <p className="text-white font-bold text-sm leading-tight">Football</p>
               <p className="text-slate-500 text-xs">Tracker</p>
