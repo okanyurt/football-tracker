@@ -5,7 +5,7 @@ import Modal from "@/components/Modal";
 import { format } from "date-fns";
 import {
   ArrowLeft, CircleDollarSign, Users, UserPlus2, X, Pencil, Check,
-  Star, Wand2, Trash2, ChevronDown, ChevronUp,
+  Star, Wand2, Trash2, ChevronDown, ChevronUp, Copy, Check as CheckIcon,
 } from "lucide-react";
 import { useToast } from "@/hooks/useToast";
 import { cycleTeam } from "@/utils/teams";
@@ -46,6 +46,7 @@ export default function MatchDetailPage() {
   const [customRaterName, setCustomRaterName] = useState("");
   const [ratingInputs, setRatingInputs] = useState<Record<string, number>>({});
   const [expandedRater, setExpandedRater] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
 
   const loadMatch = useCallback(async () => {
     const { data, error } = await getMatch(id);
@@ -570,15 +571,33 @@ export default function MatchDetailPage() {
       <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
         <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
           <h2 className="text-sm font-semibold text-slate-700">Tüm Oyuncular</h2>
-          {availablePlayers.length > 0 && (
+          <div className="flex items-center gap-3">
             <button
-              onClick={() => { setSelectedIds([]); setShowAddPlayers(true); }}
-              className="flex items-center gap-1.5 text-sm text-emerald-600 hover:text-emerald-700 font-medium"
+              onClick={() => {
+                const text = [...match.matchPlayers]
+                  .map((mp) => mp.player.name)
+                  .sort((a, b) => a.localeCompare(b, "tr"))
+                  .map((name, i) => `${i + 1}-${name}`)
+                  .join("\n");
+                navigator.clipboard.writeText(text);
+                setCopied(true);
+                setTimeout(() => setCopied(false), 2000);
+              }}
+              className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-700 font-medium transition-colors"
             >
-              <UserPlus2 size={15} />
-              Oyuncu Ekle
+              {copied ? <CheckIcon size={14} className="text-emerald-600" /> : <Copy size={14} />}
+              {copied ? "Kopyalandı" : "Kopyala"}
             </button>
-          )}
+            {availablePlayers.length > 0 && (
+              <button
+                onClick={() => { setSelectedIds([]); setShowAddPlayers(true); }}
+                className="flex items-center gap-1.5 text-sm text-emerald-600 hover:text-emerald-700 font-medium"
+              >
+                <UserPlus2 size={15} />
+                Oyuncu Ekle
+              </button>
+            )}
+          </div>
         </div>
 
         {match.matchPlayers.length === 0 ? (
