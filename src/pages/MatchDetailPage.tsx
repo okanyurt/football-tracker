@@ -14,7 +14,7 @@ import type { MatchDetail, MatchRatingData } from "@/types/matches";
 import type { Player } from "@/types/players";
 import {
   getMatch, updateTeams, addParticipants, removeParticipant,
-  getMatchRatings, submitRatings, deleteRater, suggestTeams,
+  getMatchRatings, submitRatings, deleteRater, suggestTeams, toggleHasPaid, payFromKasa,
 } from "@/services/matches";
 import { getPlayers } from "@/services/players";
 
@@ -647,9 +647,43 @@ export default function MatchDetailPage() {
                       )}
                     </td>
                     <td className="px-5 py-3.5 text-right">
-                      <span className="font-bold text-sm bg-red-50 text-red-600 px-2.5 py-1 rounded-full">
-                        ₺{mp.amountOwed.toFixed(0)}
-                      </span>
+                      <div className="flex items-center justify-end gap-2">
+                        {mp.amountOwed > 0 && !mp.hasPaid && mp.playerBalance >= mp.amountOwed && (
+                          <button
+                            onClick={async () => {
+                              const { error } = await payFromKasa(id, mp.playerId);
+                              if (error) { showError(error); return; }
+                              loadMatch();
+                            }}
+                            title="Kasa bakiyesinden öde"
+                            className="inline-flex items-center gap-1 text-xs font-bold px-2 py-1 rounded-lg border bg-blue-50 text-blue-600 border-blue-200 hover:bg-blue-100 transition-colors"
+                          >
+                            Kasadan Öde
+                          </button>
+                        )}
+                        {mp.amountOwed > 0 && (
+                          <button
+                            onClick={async () => {
+                              await toggleHasPaid(id, mp.playerId);
+                              loadMatch();
+                            }}
+                            title={mp.hasPaid ? "Ödemeyi geri al" : "Ödendi olarak işaretle"}
+                            className={`inline-flex items-center gap-1 text-xs font-bold px-2 py-1 rounded-lg border transition-colors ${
+                              mp.hasPaid
+                                ? "bg-emerald-50 text-emerald-600 border-emerald-200 hover:bg-emerald-100"
+                                : "bg-slate-50 text-slate-400 border-slate-200 hover:bg-slate-100"
+                            }`}
+                          >
+                            <CheckIcon size={12} />
+                            {mp.hasPaid ? "Ödendi" : "Bekliyor"}
+                          </button>
+                        )}
+                        <span className={`font-bold text-sm px-2.5 py-1 rounded-full ${
+                          mp.amountOwed === 0 ? "bg-slate-100 text-slate-400" : "bg-red-50 text-red-600"
+                        }`}>
+                          ₺{mp.amountOwed.toFixed(0)}
+                        </span>
+                      </div>
                     </td>
                     <td className="px-5 py-3.5 text-right">
                       <button

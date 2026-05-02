@@ -79,6 +79,16 @@ export async function deleteRater(matchId: string, raterName: string): Promise<R
   return handle(res, "Puanlama silinemedi");
 }
 
+export async function toggleHasPaid(matchId: string, playerId: string): Promise<Result<void>> {
+  const res = await fetch(`/api/matches/${matchId}/participants/${playerId}/paid`, { method: "PATCH" });
+  return handle(res, "Ödeme durumu güncellenemedi");
+}
+
+export async function payFromKasa(matchId: string, playerId: string): Promise<Result<void>> {
+  const res = await fetch(`/api/matches/${matchId}/participants/${playerId}/pay-from-kasa`, { method: "PATCH" });
+  return handle(res, "Kasadan ödeme yapılamadı");
+}
+
 export async function suggestTeams(matchId: string): Promise<Result<SuggestTeamsResult>> {
   const res = await fetch(`/api/matches/${matchId}/suggest-teams`);
   return handle(res, "Takım önerisi alınamadı");

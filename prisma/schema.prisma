@@ -45,6 +45,7 @@ model MatchPlayer {
   playerId     String
   amountOwed   Float
   isGoalkeeper Boolean @default(false)
+  hasPaid      Boolean @default(false)
   team         Int?
   player       Player  @relation(fields: [playerId], references: [id], onDelete: Cascade)
   match        Match   @relation(fields: [matchId], references: [id], onDelete: Cascade)

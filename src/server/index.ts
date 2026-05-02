@@ -521,7 +521,18 @@ app.get(
   asyncRoute(async (req, res) => {
     const match = await prisma.match.findFirst({
       where: { id: req.params.id, deletedAt: null },
-      include: { matchPlayers: { include: { player: true } } },
+      include: {
+        matchPlayers: {
+          include: {
+            player: {
+              include: {
+                matchPlayers: { include: { match: true } },
+                payments: true,
+              },
+            },
+          },
+        },
+      },
     });
 
     if (!match) {
@@ -529,7 +540,16 @@ app.get(
       return;
     }
 
-    res.json(match);
+    const enriched = {
+      ...match,
+      matchPlayers: match.matchPlayers.map((mp) => {
+        const { balance } = calculatePlayerBalance(mp.player.matchPlayers, mp.player.payments);
+        const { matchPlayers: _mp, payments: _py, ...playerClean } = mp.player;
+        return { ...mp, player: playerClean, playerBalance: balance };
+      }),
+    };
+
+    res.json(enriched);
   })
 );
 
@@ -702,6 +722,51 @@ app.delete(
       include: { matchPlayers: { include: { player: true } } },
     });
     res.json(updated);
+  })
+);
+
+app.patch(
+  "/api/matches/:matchId/participants/:playerId/paid",
+  asyncRoute(async (req, res) => {
+    const { matchId, playerId } = req.params;
+    const mp = await prisma.matchPlayer.findUnique({
+      where: { matchId_playerId: { matchId, playerId } },
+    });
+    if (!mp) { res.status(404).json({ error: "Oyuncu bulunamadı" }); return; }
+    const updated = await prisma.matchPlayer.update({
+      where: { matchId_playerId: { matchId, playerId } },
+      data: { hasPaid: !mp.hasPaid },
+      include: { player: true },
+    });
+    res.json(updated);
+  })
+);
+
+app.patch(
+  "/api/matches/:matchId/participants/:playerId/pay-from-kasa",
+  asyncRoute(async (req, res) => {
+    const { matchId, playerId } = req.params;
+    const mp = await prisma.matchPlayer.findUnique({
+      where: { matchId_playerId: { matchId, playerId } },
+    });
+    if (!mp) { res.status(404).json({ error: "Oyuncu bulunamadı" }); return; }
+
+    const [matchPlayers, payments] = await Promise.all([
+      prisma.matchPlayer.findMany({ where: { playerId }, include: { match: true } }),
+      prisma.payment.findMany({ where: { playerId } }),
+    ]);
+    const { balance } = calculatePlayerBalance(matchPlayers, payments);
+
+    if (balance < mp.amountOwed) {
+      res.status(400).json({ error: `Yetersiz kasa bakiyesi (₺${balance.toFixed(0)})` });
+      return;
+    }
+
+    await prisma.matchPlayer.update({
+      where: { matchId_playerId: { matchId, playerId } },
+      data: { hasPaid: true },
+    });
+    res.json({ success: true });
   })
 );
 
@@ -914,6 +979,26 @@ app.post(
       },
       include: { player: true },
     });
+
+    // Kasa değilse → oyuncunun en eski açık (hasPaid=false, amountOwed>0) maçını işaretle
+    if (!isKasaBool) {
+      const oldestUnpaid = await prisma.matchPlayer.findFirst({
+        where: {
+          playerId,
+          hasPaid: false,
+          amountOwed: { gt: 0 },
+          match: { deletedAt: null, cancelledAt: null },
+        },
+        orderBy: { match: { date: "asc" } },
+      });
+      if (oldestUnpaid) {
+        await prisma.matchPlayer.update({
+          where: { id: oldestUnpaid.id },
+          data: { hasPaid: true },
+        });
+      }
+    }
+
     res.status(201).json(payment);
   })
 );

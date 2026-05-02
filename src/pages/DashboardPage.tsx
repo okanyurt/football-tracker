@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { Link } from "react-router-dom";
 import Modal from "@/components/Modal";
-import { TrendingDown, Wallet, Users, UserX } from "lucide-react";
+import { TrendingDown, Wallet, Users, UserX, ArrowDownUp } from "lucide-react";
 import Avatar from "@/components/Avatar";
 import { useToast } from "@/hooks/useToast";
 import type { Player, AtRiskPlayer } from "@/types/players";
@@ -57,11 +57,21 @@ export default function DashboardPage() {
     load();
   };
 
-  const sorted = [...players].sort((a, b) => {
-    const rank = (p: Player) => (p.balance < 0 ? 0 : p.balance > 0 ? 1 : 2);
-    if (rank(a) !== rank(b)) return rank(a) - rank(b);
-    return a.balance - b.balance;
-  });
+  const [missedFilter, setMissedFilter] = useState(false);
+
+  const sorted = (() => {
+    const base = [...players].sort((a, b) => {
+      const rank = (p: Player) => (p.balance < 0 ? 0 : p.balance > 0 ? 1 : 2);
+      if (rank(a) !== rank(b)) return rank(a) - rank(b);
+      return a.balance - b.balance;
+    });
+    if (missedFilter) {
+      return base
+        .filter((p) => p.missedStreak > 0)
+        .sort((a, b) => b.missedStreak - a.missedStreak);
+    }
+    return base;
+  })();
 
   const totalDebt = players.filter((p) => p.balance < 0).reduce((sum, p) => sum + Math.abs(p.balance), 0);
   const totalKasa = players.filter((p) => p.balance > 0).reduce((sum, p) => sum + p.balance, 0);
@@ -152,8 +162,26 @@ export default function DashboardPage() {
         </div>
       ) : (
         <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
-          <div className="px-5 py-4 border-b border-slate-100">
-            <h2 className="text-sm font-semibold text-slate-700">Oyuncu Bakiyeleri</h2>
+          <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-slate-700">
+              Oyuncu Bakiyeleri
+              {missedFilter && (
+                <span className="ml-2 text-xs font-semibold bg-red-100 text-red-600 px-2 py-0.5 rounded-full">
+                  {sorted.length} oyuncu
+                </span>
+              )}
+            </h2>
+            <button
+              onClick={() => setMissedFilter((v) => !v)}
+              className={`flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-lg border transition-colors ${
+                missedFilter
+                  ? "bg-red-50 border-red-200 text-red-600"
+                  : "border-slate-200 text-slate-500 hover:bg-slate-50"
+              }`}
+            >
+              <ArrowDownUp size={12} />
+              Eksik Maç
+            </button>
           </div>
           <table className="w-full">
             <thead className="bg-slate-50 border-b border-slate-100">

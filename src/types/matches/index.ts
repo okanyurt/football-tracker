@@ -8,8 +8,10 @@ export interface MatchPlayer {
   playerId: string;
   amountOwed: number;
   isGoalkeeper: boolean;
+  hasPaid: boolean;
   team: number | null;
   player: BasicPlayer;
+  playerBalance: number;
 }
 
 export interface MatchListItem {
