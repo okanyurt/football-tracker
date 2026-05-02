@@ -47,6 +47,7 @@ export default function MatchDetailPage() {
   const [ratingInputs, setRatingInputs] = useState<Record<string, number>>({});
   const [expandedRater, setExpandedRater] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [copiedRater, setCopiedRater] = useState<string | null>(null);
 
   const loadMatch = useCallback(async () => {
     const { data, error } = await getMatch(id);
@@ -280,7 +281,28 @@ export default function MatchDetailPage() {
           <div className="divide-y divide-slate-100">
             {/* Player Averages */}
             <div className="p-5">
-              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Oyuncu Ortalamaları</p>
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Oyuncu Ortalamaları</p>
+                <button
+                  onClick={() => {
+                    const text = [...matchRatings.players]
+                      .filter((p) => p.count > 0)
+                      .sort((a, b) => a.playerName.localeCompare(b.playerName, "tr"))
+                      .map((p) => {
+                        const avg = p.average % 1 === 0 ? p.average : p.average.toFixed(1);
+                        return `${p.playerName}: ${avg}`;
+                      })
+                      .join("\n");
+                    navigator.clipboard.writeText(text);
+                    setCopied(true);
+                    setTimeout(() => setCopied(false), 2000);
+                  }}
+                  className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-slate-600 font-medium transition-colors"
+                >
+                  {copied ? <CheckIcon size={12} className="text-emerald-600" /> : <Copy size={12} />}
+                  {copied ? "Kopyalandı" : "Kopyala"}
+                </button>
+              </div>
               <div className="space-y-2">
                 {matchRatings.players.map((p, idx) => {
                   const isTop = p.playerId === topPlayerId;
@@ -313,7 +335,23 @@ export default function MatchDetailPage() {
 
             {/* Rater List */}
             <div className="p-5">
-              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Puan Girenler</p>
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Puan Girenler</p>
+                <button
+                  onClick={() => {
+                    const text = [...matchRatings.raters]
+                      .sort((a, b) => a.localeCompare(b, "tr"))
+                      .join("\n");
+                    navigator.clipboard.writeText(text);
+                    setCopied(true);
+                    setTimeout(() => setCopied(false), 2000);
+                  }}
+                  className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-slate-600 font-medium transition-colors"
+                >
+                  {copied ? <CheckIcon size={12} className="text-emerald-600" /> : <Copy size={12} />}
+                  {copied ? "Kopyalandı" : "Kopyala"}
+                </button>
+              </div>
               <div className="space-y-1">
                 {matchRatings.raters.map((rater) => {
                   const isExpanded = expandedRater === rater;
@@ -328,6 +366,23 @@ export default function MatchDetailPage() {
                         </div>
                         <span className="text-sm font-semibold text-slate-700 flex-1">{rater}</span>
                         <span className="text-xs text-slate-400">{raterData.length} oyuncu</span>
+                        <button
+                          onClick={() => {
+                            const text =
+                              `${rater}:\n` +
+                              [...raterData]
+                                .sort((a, b) => a.player.playerName.localeCompare(b.player.playerName, "tr"))
+                                .map(({ player, entry }) => `${player.playerName}: ${entry!.rating}`)
+                                .join("\n");
+                            navigator.clipboard.writeText(text);
+                            setCopiedRater(rater);
+                            setTimeout(() => setCopiedRater(null), 2000);
+                          }}
+                          className="p-1 text-slate-400 hover:text-slate-600 transition-colors"
+                          title="Kopyala"
+                        >
+                          {copiedRater === rater ? <CheckIcon size={13} className="text-emerald-600" /> : <Copy size={13} />}
+                        </button>
                         <button
                           onClick={() => setExpandedRater(isExpanded ? null : rater)}
                           className="p-1 text-slate-400 hover:text-slate-600"
@@ -376,13 +431,40 @@ export default function MatchDetailPage() {
         <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
           <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
             <h2 className="text-sm font-semibold text-slate-700">Takımlar</h2>
-            <button
-              onClick={openTeamEdit}
-              className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-700 font-medium"
-            >
-              <Pencil size={13} />
-              {hasTeams ? "Düzenle" : "Takım Ata"}
-            </button>
+            <div className="flex items-center gap-3">
+              {hasTeams && (
+                <button
+                  onClick={() => {
+                    const formatTeam = (name: string, players: typeof team1Players) =>
+                      `${name}\n` +
+                      [...players]
+                        .sort((a, b) => a.player.name.localeCompare(b.player.name, "tr"))
+                        .map((mp, i) => `${i + 1}-${mp.player.name}`)
+                        .join("\n");
+
+                    const text = [
+                      formatTeam(t1Name, team1Players),
+                      formatTeam(t2Name, team2Players),
+                    ].join("\n\n");
+
+                    navigator.clipboard.writeText(text);
+                    setCopied(true);
+                    setTimeout(() => setCopied(false), 2000);
+                  }}
+                  className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-700 font-medium transition-colors"
+                >
+                  {copied ? <CheckIcon size={14} className="text-emerald-600" /> : <Copy size={14} />}
+                  {copied ? "Kopyalandı" : "Kopyala"}
+                </button>
+              )}
+              <button
+                onClick={openTeamEdit}
+                className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-700 font-medium"
+              >
+                <Pencil size={13} />
+                {hasTeams ? "Düzenle" : "Takım Ata"}
+              </button>
+            </div>
           </div>
 
           {!hasTeams ? (
