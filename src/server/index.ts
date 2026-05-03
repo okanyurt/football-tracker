@@ -33,6 +33,7 @@ import {
 } from "@/lib/schemas";
 
 const app = express();
+app.set("trust proxy", 1);
 const port = Number(process.env.API_PORT ?? 3000);
 const MAX_FAILED_ATTEMPTS = 5;
 const LOCKOUT_DURATION_MS = 15 * 60 * 1000;
@@ -40,12 +41,28 @@ const DUMMY_HASH = "$2b$12$dummyhashfortimingprotection000000000000000000000000u
 const PUBLIC_API_PREFIXES = ["/api/auth/login", "/api/auth/refresh", "/api/auth/logout"];
 const MUTATING_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 
+const isProd = process.env.NODE_ENV === "production";
+
 const securityHeaders: Record<string, string> = {
   "X-Frame-Options": "DENY",
   "X-Content-Type-Options": "nosniff",
   "X-XSS-Protection": "1; mode=block",
   "Referrer-Policy": "strict-origin-when-cross-origin",
   "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
+  // HSTS — only meaningful over HTTPS, so only set in production
+  ...(isProd && {
+    "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
+  }),
+  // CSP — allows same-origin scripts/styles and inline styles (needed by Tailwind/Vite)
+  "Content-Security-Policy": [
+    "default-src 'self'",
+    "script-src 'self' 'unsafe-inline'",
+    "style-src 'self' 'unsafe-inline'",
+    "img-src 'self' data: blob:",
+    "font-src 'self' data:",
+    "connect-src 'self'",
+    "frame-ancestors 'none'",
+  ].join("; "),
 };
 
 function asyncRoute(
@@ -96,8 +113,16 @@ function csrfCheck(req: Request): boolean {
   return allowedOrigins.has(origin);
 }
 
-app.use(express.json());
+app.use(express.json({ limit: "50kb" }));
 app.use(cookieParser());
+
+// Request timeout — 30 s
+app.use((_req, res, next) => {
+  res.setTimeout(30_000, () => {
+    res.status(503).json({ error: "İstek zaman aşımına uğradı" });
+  });
+  next();
+});
 app.use((_req, res, next) => {
   Object.entries(securityHeaders).forEach(([key, value]) => res.setHeader(key, value));
   next();

@@ -4,7 +4,7 @@ import { z } from "zod";
 
 export const LoginSchema = z.object({
   username: z.string().min(1).max(64).trim(),
-  password: z.string().min(1).max(128),
+  password: z.string().min(8, "Şifre en az 8 karakter olmalıdır").max(128),
 });
 
 // ── Players ──────────────────────────────────────────────────────────────────
@@ -85,7 +85,7 @@ export const UpdateTeamsSchema = z.object({
 
 export const CreatePaymentSchema = z.object({
   playerId: z.string().cuid("Invalid player id"),
-  amount: z.number({ message: "amount must be a number" }),
+  amount: z.number({ message: "amount must be a number" }).finite().min(-1_000_000).max(1_000_000),
   notes: z.string().max(500).trim().optional().nullable(),
   date: z.string().optional().nullable(),
   isKasa: z.boolean().optional(),
