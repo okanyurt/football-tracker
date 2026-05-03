@@ -11,20 +11,20 @@ export async function getPlayer(id: string): Promise<Result<PlayerDetail>> {
   return handle(res, "Oyuncu bulunamadı");
 }
 
-export async function createPlayer(name: string, phone?: string): Promise<Result<Player>> {
+export async function createPlayer(name: string, phone?: string, isGuest?: boolean): Promise<Result<Player>> {
   const res = await fetch("/api/players", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ name, phone }),
+    body: JSON.stringify({ name, phone, isGuest }),
   });
   return handle(res, "Oyuncu eklenemedi");
 }
 
-export async function updatePlayer(id: string, name: string, phone?: string, isExempt?: boolean, positions?: string): Promise<Result<Player>> {
+export async function updatePlayer(id: string, name: string, phone?: string, isExempt?: boolean, positions?: string, isGuest?: boolean): Promise<Result<Player>> {
   const res = await fetch(`/api/players/${id}`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ name, phone, isExempt, positions }),
+    body: JSON.stringify({ name, phone, isExempt, positions, isGuest }),
   });
   return handle(res, "Oyuncu güncellenemedi");
 }
@@ -37,6 +37,7 @@ export async function toggleRemovedFromGroup(player: Player): Promise<Result<Pla
       name: player.name,
       phone: player.phone,
       isExempt: player.isExempt,
+      isGuest: player.isGuest,
       positions: player.positions,
       removedFromGroup: !player.removedFromGroup,
     }),

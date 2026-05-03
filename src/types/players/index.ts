@@ -4,6 +4,7 @@ export interface Player {
   phone: string | null;
   isExempt: boolean;
   removedFromGroup: boolean;
+  isGuest: boolean;
   positions: string;
   balance: number;
   totalOwed: number;

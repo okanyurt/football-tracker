@@ -15,6 +15,7 @@ export default function PlayersPage() {
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [isExempt, setIsExempt] = useState(false);
+  const [isGuest, setIsGuest] = useState(false);
   const [saving, setSaving] = useState(false);
   const [missedSort, setMissedSort] = useState<"none" | "desc" | "asc">("none");
   const [balanceSort, setBalanceSort] = useState<"none" | "desc" | "asc">("none");
@@ -36,6 +37,7 @@ export default function PlayersPage() {
     setName("");
     setPhone("");
     setIsExempt(false);
+    setIsGuest(false);
     setShowAdd(true);
   };
 
@@ -44,18 +46,19 @@ export default function PlayersPage() {
     setName(player.name);
     setPhone(player.phone || "");
     setIsExempt(player.isExempt);
+    setIsGuest(player.isGuest);
   };
 
   const handleSave = async () => {
     if (!name.trim()) return;
     setSaving(true);
     if (editPlayer) {
-      const { error } = await updatePlayer(editPlayer.id, name, phone, isExempt);
+      const { error } = await updatePlayer(editPlayer.id, name, phone, isExempt, undefined, isGuest);
       setSaving(false);
       if (error) { showError(error); return; }
       setEditPlayer(null);
     } else {
-      const { error } = await createPlayer(name, phone);
+      const { error } = await createPlayer(name, phone, isGuest);
       setSaving(false);
       if (error) { showError(error); return; }
       setShowAdd(false);
@@ -176,7 +179,7 @@ export default function PlayersPage() {
                 }
                 return players;
               })().map((player) => (
-                <tr key={player.id} className={`transition-colors ${player.removedFromGroup ? "bg-red-50 hover:bg-red-100" : "hover:bg-slate-50"}`}>
+                <tr key={player.id} className={`transition-colors ${player.removedFromGroup ? "bg-red-50 hover:bg-red-100" : player.isGuest ? "bg-amber-50 hover:bg-amber-100" : "hover:bg-slate-50"}`}>
                   <td className="px-5 py-3.5">
                     <div className="flex items-center gap-3">
                       <div className="relative">
@@ -189,6 +192,11 @@ export default function PlayersPage() {
                         <Link to={`/players/${player.id}`} className="font-medium text-slate-800 hover:text-emerald-600 transition-colors">
                           {player.name}
                         </Link>
+                        {player.isGuest && (
+                          <span className="text-[11px] font-bold bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-md leading-none">
+                            Misafir
+                          </span>
+                        )}
                         {player.isExempt && (
                           <span className="text-[11px] font-bold bg-blue-100 text-blue-600 px-1.5 py-0.5 rounded-md leading-none">
                             Muaf
@@ -199,7 +207,7 @@ export default function PlayersPage() {
                             Gruptan Çıktı
                           </span>
                         )}
-                        {!player.isExempt && !player.removedFromGroup && player.missedStreak > 0 && (
+                        {!player.isExempt && !player.removedFromGroup && !player.isGuest && player.missedStreak > 0 && (
                           <span className="text-[11px] font-bold bg-red-100 text-red-600 px-1.5 py-0.5 rounded-md leading-none">
                             -{player.missedStreak} maç
                           </span>
@@ -256,17 +264,19 @@ export default function PlayersPage() {
                       >
                         <Pencil size={14} />
                       </button>
-                      <button
-                        onClick={() => handleToggleRemoved(player)}
-                        className={`p-1.5 rounded-lg transition-colors ${
-                          player.removedFromGroup
-                            ? "text-slate-500 bg-slate-100 hover:text-slate-700"
-                            : "text-slate-400 hover:text-slate-600 hover:bg-slate-100"
-                        }`}
-                        title={player.removedFromGroup ? "Gruba geri al" : "Gruptan çıkart"}
-                      >
-                        <UserX size={14} />
-                      </button>
+                      {!player.isGuest && (
+                        <button
+                          onClick={() => handleToggleRemoved(player)}
+                          className={`p-1.5 rounded-lg transition-colors ${
+                            player.removedFromGroup
+                              ? "text-slate-500 bg-slate-100 hover:text-slate-700"
+                              : "text-slate-400 hover:text-slate-600 hover:bg-slate-100"
+                          }`}
+                          title={player.removedFromGroup ? "Gruba geri al" : "Gruptan çıkart"}
+                        >
+                          <UserX size={14} />
+                        </button>
+                      )}
                       <button
                         onClick={() => handleDelete(player.id, player.name)}
                         className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
@@ -315,6 +325,19 @@ export default function PlayersPage() {
                 className="w-full border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-slate-800"
               />
             </div>
+            <button
+              type="button"
+              onClick={() => setIsGuest((v) => !v)}
+              className="flex items-center gap-3 cursor-pointer select-none py-1 w-full text-left"
+            >
+              <div className={`w-10 h-6 rounded-full flex items-center transition-colors shrink-0 ${isGuest ? "bg-amber-400" : "bg-slate-200"}`}>
+                <span className={`w-5 h-5 bg-white rounded-full shadow transition-transform mx-0.5 ${isGuest ? "translate-x-4" : "translate-x-0"}`} />
+              </div>
+              <div>
+                <p className="text-sm font-medium text-slate-700">Misafir</p>
+                <p className="text-xs text-slate-400">Eksik maç hesaplanmaz</p>
+              </div>
+            </button>
             <div className="flex gap-3 pt-1">
               <button
                 onClick={() => { setShowAdd(false); setEditPlayer(null); }}

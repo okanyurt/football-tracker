@@ -34,11 +34,11 @@ export async function updateTeams(id: string, payload: UpdateTeamsDto): Promise<
   return handle(res, "Takımlar kaydedilemedi");
 }
 
-export async function addParticipants(matchId: string, playerIds: string[]): Promise<Result<MatchDetail>> {
+export async function addParticipants(matchId: string, playerIds: string[], goalkeeperPlayerIds?: string[]): Promise<Result<MatchDetail>> {
   const res = await fetch(`/api/matches/${matchId}/participants`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ playerIds }),
+    body: JSON.stringify({ playerIds, goalkeeperPlayerIds }),
   });
   return handle(res, "Oyuncu eklenemedi");
 }

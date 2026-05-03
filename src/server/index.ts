@@ -286,7 +286,7 @@ app.get(
       );
 
       let missedStreak = 0;
-      if (!player.isExempt && !player.removedFromGroup) {
+      if (!player.isExempt && !player.removedFromGroup && !player.isGuest) {
         for (const matchId of allMatchIds) {
           if (attendedIds.has(matchId)) break;
           missedStreak++;
@@ -302,6 +302,7 @@ app.get(
         phone: player.phone,
         isExempt: player.isExempt,
         removedFromGroup: player.removedFromGroup,
+        isGuest: player.isGuest,
         positions: player.positions,
         createdAt: player.createdAt,
         balance,
@@ -326,9 +327,9 @@ app.post(
       return;
     }
 
-    const { name, phone } = parsed.data;
+    const { name, phone, isGuest } = parsed.data;
     const player = await prisma.player.create({
-      data: { name, phone: phone?.trim() || null },
+      data: { name, phone: phone?.trim() || null, ...(isGuest !== undefined && { isGuest }) },
     });
     res.status(201).json(player);
   })
@@ -351,7 +352,7 @@ app.get(
 
     const recentMatchIds = recentMatches.map((m) => m.id);
     const players = await prisma.player.findMany({
-      where: { deletedAt: null, isExempt: false },
+      where: { deletedAt: null, isExempt: false, isGuest: false },
       select: {
         id: true,
         name: true,
@@ -414,7 +415,7 @@ app.put(
       return;
     }
 
-    const { name, phone, isExempt, removedFromGroup, positions } = parsed.data;
+    const { name, phone, isExempt, removedFromGroup, isGuest, positions } = parsed.data;
     const player = await prisma.player.update({
       where: { id: req.params.id },
       data: {
@@ -422,6 +423,7 @@ app.put(
         phone: phone?.trim() || null,
         ...(isExempt !== undefined && { isExempt }),
         ...(removedFromGroup !== undefined && { removedFromGroup }),
+        ...(isGuest !== undefined && { isGuest }),
         ...(positions !== undefined && { positions }),
       },
     });
@@ -640,7 +642,8 @@ app.post(
     }
 
     const matchId = req.params.id;
-    const { playerIds } = parsed.data;
+    const { playerIds, goalkeeperPlayerIds } = parsed.data;
+    const gkSet = new Set(goalkeeperPlayerIds ?? []);
     const match = await prisma.match.findUnique({
       where: { id: matchId },
       include: { matchPlayers: true },
@@ -653,23 +656,39 @@ app.post(
 
     const existingPlayerIds = match.matchPlayers.map((mp) => mp.playerId);
     const newPlayerIds = playerIds.filter((pid) => !existingPlayerIds.includes(pid));
-    const totalPlayers = existingPlayerIds.length + newPlayerIds.length;
-    if (totalPlayers === 0) {
+    if (existingPlayerIds.length + newPlayerIds.length === 0) {
       res.status(400).json({ error: "No players to add" });
       return;
     }
 
-    const amountPerPlayer = roundCents(match.totalCost / totalPlayers);
+    // Kaleci olmayan (ödeyen) oyuncu sayısını hesapla
+    const existingGkIds = new Set(match.matchPlayers.filter((mp) => mp.isGoalkeeper).map((mp) => mp.playerId));
+    const newGkIds = gkSet;
+    const payingExisting = match.matchPlayers.filter((mp) => !existingGkIds.has(mp.playerId)).length;
+    const payingNew = newPlayerIds.filter((pid) => !newGkIds.has(pid)).length;
+    const payingCount = payingExisting + payingNew;
+
+    const amountPerPlayer = match.goalkeeperFree && payingCount > 0
+      ? roundCents(match.totalCost / payingCount)
+      : payingCount + existingGkIds.size + newGkIds.size > 0
+      ? roundCents(match.totalCost / (match.matchPlayers.length + newPlayerIds.length))
+      : 0;
+
     await prisma.$transaction([
       ...match.matchPlayers.map((mp) =>
         prisma.matchPlayer.update({
           where: { id: mp.id },
-          data: { amountOwed: amountPerPlayer },
+          data: { amountOwed: match.goalkeeperFree && existingGkIds.has(mp.playerId) ? 0 : amountPerPlayer },
         })
       ),
       ...newPlayerIds.map((playerId) =>
         prisma.matchPlayer.create({
-          data: { matchId, playerId, amountOwed: amountPerPlayer },
+          data: {
+            matchId,
+            playerId,
+            amountOwed: match.goalkeeperFree && newGkIds.has(playerId) ? 0 : amountPerPlayer,
+            isGoalkeeper: newGkIds.has(playerId),
+          },
         })
       ),
     ]);
@@ -706,12 +725,17 @@ app.delete(
     await prisma.matchPlayer.deleteMany({ where: { matchId, playerId } });
     const remaining = match.matchPlayers.filter((mp) => mp.playerId !== playerId);
     if (remaining.length > 0) {
-      const amountPerPlayer = roundCents(match.totalCost / remaining.length);
+      const payingRemaining = remaining.filter((mp) => !mp.isGoalkeeper);
+      const amountPerPlayer = match.goalkeeperFree && payingRemaining.length > 0
+        ? roundCents(match.totalCost / payingRemaining.length)
+        : remaining.length > 0
+        ? roundCents(match.totalCost / remaining.length)
+        : 0;
       await prisma.$transaction(
         remaining.map((mp) =>
           prisma.matchPlayer.update({
             where: { id: mp.id },
-            data: { amountOwed: amountPerPlayer },
+            data: { amountOwed: match.goalkeeperFree && mp.isGoalkeeper ? 0 : amountPerPlayer },
           })
         )
       );
@@ -888,56 +912,33 @@ app.get(
     }
 
     const DEFAULT_RATING = 5;
-    const sorted = [...match.matchPlayers].sort((a, b) => {
-      return (avgMap[b.playerId] ?? DEFAULT_RATING) - (avgMap[a.playerId] ?? DEFAULT_RATING);
-    });
-
-    const getPos = (mp: (typeof sorted)[0]) =>
-      mp.player.positions ? mp.player.positions.split(",").filter(Boolean) : [];
+    const sorted = [...match.matchPlayers].sort(
+      (a, b) => (avgMap[b.playerId] ?? DEFAULT_RATING) - (avgMap[a.playerId] ?? DEFAULT_RATING)
+    );
 
     const team1: string[] = [];
     const team2: string[] = [];
 
-    const snakeDraft = (players: typeof sorted) => {
-      players.forEach((mp, i) => {
-        const round = Math.floor(i / 2);
-        const isT1Pick = round % 2 === 0 ? i % 2 === 0 : i % 2 === 1;
-        if (isT1Pick) team1.push(mp.playerId);
-        else team2.push(mp.playerId);
-      });
-    };
-
-    // GKs: maçta isGoalkeeper olarak işaretlenenler → her takıma 1 (en iyi → T1)
-    const gks = sorted.filter((mp) => mp.isGoalkeeper);
-    gks.forEach((mp, i) => {
-      if (i % 2 === 0) team1.push(mp.playerId);
-      else team2.push(mp.playerId);
+    // Kaleciler: en iyi 2 tanesini al (1 → T1, 2 → T2), fazlası sahaya düşer
+    const gkPool = sorted.filter((mp) => mp.isGoalkeeper);
+    const selectedGks = gkPool.slice(0, 2);
+    const extraGks = gkPool.slice(2);
+    selectedGks.forEach((mp, i) => {
+      if (i === 0) team1.push(mp.playerId); else team2.push(mp.playerId);
     });
 
-    // Saha oyuncuları: positions alanına göre D → O → F → mevkisiz gruplara ayrılır
-    const field = sorted.filter((mp) => !mp.isGoalkeeper);
-    const defs  = field.filter((mp) => getPos(mp).includes("D"));
-    const mids  = field.filter((mp) => !getPos(mp).includes("D") && getPos(mp).includes("O"));
-    const fwds  = field.filter((mp) => !getPos(mp).includes("D") && !getPos(mp).includes("O") && getPos(mp).includes("F"));
-    const none  = field.filter((mp) => getPos(mp).length === 0);
+    // Saha: kaleci olmayanlar + fazla kaleciler → rating sırasında snake draft
+    const fieldPool = [
+      ...sorted.filter((mp) => !mp.isGoalkeeper),
+      ...extraGks,
+    ].sort((a, b) => (avgMap[b.playerId] ?? DEFAULT_RATING) - (avgMap[a.playerId] ?? DEFAULT_RATING));
 
-    // Eğer hiç mevki tanımlanmamışsa tüm saha oyuncuları tek havuzda snake draft
-    if (defs.length === 0 && mids.length === 0 && fwds.length === 0) {
-      snakeDraft(field);
-    } else {
-      let t1Starts = true;
-      for (const group of [defs, mids, fwds, none]) {
-        if (group.length === 0) continue;
-        group.forEach((mp, i) => {
-          const round = Math.floor(i / 2);
-          const localFirst = round % 2 === 0 ? i % 2 === 0 : i % 2 === 1;
-          const goesT1 = t1Starts ? localFirst : !localFirst;
-          if (goesT1) team1.push(mp.playerId);
-          else team2.push(mp.playerId);
-        });
-        t1Starts = !t1Starts;
-      }
-    }
+    // Snake draft: T1,T2,T2,T1,T1,T2,T2,T1,... → her iki takım eşit sayıda oyuncu alır
+    fieldPool.forEach((mp, i) => {
+      const round = Math.floor(i / 2);
+      const goesT1 = round % 2 === 0 ? i % 2 === 0 : i % 2 === 1;
+      if (goesT1) team1.push(mp.playerId); else team2.push(mp.playerId);
+    });
 
     res.json({
       team1,

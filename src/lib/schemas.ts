@@ -20,6 +20,7 @@ export const CreatePlayerSchema = z.object({
     .trim()
     .optional()
     .nullable(),
+  isGuest: z.boolean().optional(),
 });
 
 export const UpdatePlayerSchema = CreatePlayerSchema.extend({
@@ -54,6 +55,7 @@ export const AddParticipantsSchema = z.object({
     .array(z.string().cuid())
     .min(1, "At least one player required")
     .max(50, "Maximum 50 players"),
+  goalkeeperPlayerIds: z.array(z.string().cuid()).max(10).optional(),
 });
 
 export const RemoveParticipantSchema = z.object({
@@ -64,7 +66,7 @@ export const RemoveParticipantSchema = z.object({
 
 export const SubmitRatingsSchema = z.object({
   raterName: z.string().min(1, "Puanlayan adı gerekli").max(50).trim(),
-  ratings: z.record(z.string(), z.number().int().min(1).max(10)),
+  ratings: z.record(z.string(), z.number().min(1).max(10)),
 });
 
 export const DeleteRaterSchema = z.object({

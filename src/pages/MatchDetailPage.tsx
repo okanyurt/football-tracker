@@ -26,6 +26,7 @@ export default function MatchDetailPage() {
   const [loading, setLoading] = useState(true);
   const [showAddPlayers, setShowAddPlayers] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [goalkeeperIds, setGoalkeeperIds] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const { showError, ToastEl } = useToast();
 
@@ -146,16 +147,26 @@ export default function MatchDetailPage() {
   const availablePlayers = allPlayers.filter((p) => !participantIds.includes(p.id));
 
   const togglePlayer = (pid: string) => {
-    setSelectedIds((prev) => prev.includes(pid) ? prev.filter((p) => p !== pid) : [...prev, pid]);
+    if (selectedIds.includes(pid)) {
+      setSelectedIds((prev) => prev.filter((p) => p !== pid));
+      setGoalkeeperIds((prev) => prev.filter((g) => g !== pid));
+    } else {
+      setSelectedIds((prev) => [...prev, pid]);
+    }
+  };
+
+  const toggleGk = (pid: string) => {
+    setGoalkeeperIds((prev) => prev.includes(pid) ? prev.filter((g) => g !== pid) : [...prev, pid]);
   };
 
   const handleAddPlayers = async () => {
     if (selectedIds.length === 0) return;
     setSaving(true);
-    const { error } = await addParticipants(id, selectedIds);
+    const { error } = await addParticipants(id, selectedIds, goalkeeperIds.length > 0 ? goalkeeperIds : undefined);
     setSaving(false);
     if (error) { showError(error); return; }
     setShowAddPlayers(false);
+    setGoalkeeperIds([]);
     loadMatch();
   };
 
@@ -672,7 +683,7 @@ export default function MatchDetailPage() {
             </button>
             {availablePlayers.length > 0 && (
               <button
-                onClick={() => { setSelectedIds([]); setShowAddPlayers(true); }}
+                onClick={() => { setSelectedIds([]); setGoalkeeperIds([]); setShowAddPlayers(true); }}
                 className="flex items-center gap-1.5 text-sm text-emerald-600 hover:text-emerald-700 font-medium"
               >
                 <UserPlus2 size={15} />
@@ -864,7 +875,7 @@ export default function MatchDetailPage() {
                       <div className="flex items-center gap-2">
                         <button
                           type="button"
-                          onClick={() => setRatingInputs((prev) => ({ ...prev, [mp.playerId]: Math.max(1, (prev[mp.playerId] ?? 5) - 1) }))}
+                          onClick={() => setRatingInputs((prev) => ({ ...prev, [mp.playerId]: Math.round((Math.max(1, (prev[mp.playerId] ?? 5) - 0.5)) * 10) / 10 }))}
                           className="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold text-sm flex items-center justify-center"
                         >
                           −
@@ -879,7 +890,7 @@ export default function MatchDetailPage() {
                         </span>
                         <button
                           type="button"
-                          onClick={() => setRatingInputs((prev) => ({ ...prev, [mp.playerId]: Math.min(10, (prev[mp.playerId] ?? 5) + 1) }))}
+                          onClick={() => setRatingInputs((prev) => ({ ...prev, [mp.playerId]: Math.round((Math.min(10, (prev[mp.playerId] ?? 5) + 0.5)) * 10) / 10 }))}
                           className="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold text-sm flex items-center justify-center"
                         >
                           +
@@ -912,20 +923,39 @@ export default function MatchDetailPage() {
 
       {/* ── Add Players Modal ── */}
       {showAddPlayers && (
-        <Modal title="Oyuncu Ekle" onClose={() => setShowAddPlayers(false)}>
+        <Modal title="Oyuncu Ekle" onClose={() => { setShowAddPlayers(false); setSelectedIds([]); setGoalkeeperIds([]); }}>
           <div className="space-y-4">
             <div className="border border-slate-200 rounded-xl max-h-64 overflow-y-auto divide-y divide-slate-100">
-              {availablePlayers.map((player) => (
-                <label key={player.id} className="flex items-center gap-3 px-3 py-2.5 cursor-pointer hover:bg-slate-50">
-                  <input
-                    type="checkbox"
-                    checked={selectedIds.includes(player.id)}
-                    onChange={() => togglePlayer(player.id)}
-                    className="accent-emerald-600"
-                  />
-                  <span className="text-sm text-slate-700">{player.name}</span>
-                </label>
-              ))}
+              {availablePlayers.map((player) => {
+                const isSelected = selectedIds.includes(player.id);
+                const isGk = goalkeeperIds.includes(player.id);
+                return (
+                  <div key={player.id} className="flex items-center gap-2 px-3 py-2.5 hover:bg-slate-50">
+                    <label className="flex items-center gap-2 flex-1 cursor-pointer min-w-0">
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={() => togglePlayer(player.id)}
+                        className="accent-emerald-600 shrink-0"
+                      />
+                      <span className="text-sm text-slate-700 truncate">{player.name}</span>
+                    </label>
+                    {isSelected && (
+                      <button
+                        type="button"
+                        onClick={() => toggleGk(player.id)}
+                        className={`shrink-0 text-[11px] font-bold px-2 py-0.5 rounded-md border transition-colors ${
+                          isGk
+                            ? "bg-yellow-100 text-yellow-700 border-yellow-300"
+                            : "bg-slate-100 text-slate-400 border-slate-200 hover:border-yellow-300 hover:text-yellow-600"
+                        }`}
+                      >
+                        K
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
             </div>
             {selectedIds.length > 0 && match.totalCost > 0 && (
               <p className="text-xs text-emerald-700 font-medium">
@@ -934,7 +964,7 @@ export default function MatchDetailPage() {
               </p>
             )}
             <div className="flex gap-3 pt-1">
-              <button onClick={() => setShowAddPlayers(false)} className="flex-1 border border-slate-200 text-slate-600 py-2.5 rounded-xl hover:bg-slate-50 text-sm font-medium">
+              <button onClick={() => { setShowAddPlayers(false); setSelectedIds([]); setGoalkeeperIds([]); }} className="flex-1 border border-slate-200 text-slate-600 py-2.5 rounded-xl hover:bg-slate-50 text-sm font-medium">
                 İptal
               </button>
               <button onClick={handleAddPlayers} disabled={saving || selectedIds.length === 0} className="flex-1 bg-emerald-600 text-white py-2.5 rounded-xl hover:bg-emerald-700 disabled:opacity-50 text-sm font-medium">
