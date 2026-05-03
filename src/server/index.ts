@@ -303,6 +303,7 @@ app.get(
         isExempt: player.isExempt,
         removedFromGroup: player.removedFromGroup,
         isGuest: player.isGuest,
+        inGroup: !player.removedFromGroup && !player.isGuest,
         positions: player.positions,
         createdAt: player.createdAt,
         balance,
@@ -327,9 +328,15 @@ app.post(
       return;
     }
 
-    const { name, phone, isGuest } = parsed.data;
+    const { name, phone, isGuest, isExempt, removedFromGroup } = parsed.data;
     const player = await prisma.player.create({
-      data: { name, phone: phone?.trim() || null, ...(isGuest !== undefined && { isGuest }) },
+      data: {
+        name,
+        phone: phone?.trim() || null,
+        ...(isGuest !== undefined && { isGuest }),
+        ...(isExempt !== undefined && { isExempt }),
+        ...(removedFromGroup !== undefined && { removedFromGroup }),
+      },
     });
     res.status(201).json(player);
   })

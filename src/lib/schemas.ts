@@ -21,11 +21,11 @@ export const CreatePlayerSchema = z.object({
     .optional()
     .nullable(),
   isGuest: z.boolean().optional(),
+  isExempt: z.boolean().optional(),
+  removedFromGroup: z.boolean().optional(),
 });
 
 export const UpdatePlayerSchema = CreatePlayerSchema.extend({
-  isExempt: z.boolean().optional(),
-  removedFromGroup: z.boolean().optional(),
   positions: z.string().max(20).optional(),
 });
 

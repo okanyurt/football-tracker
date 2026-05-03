@@ -5,6 +5,7 @@ export interface Player {
   isExempt: boolean;
   removedFromGroup: boolean;
   isGuest: boolean;
+  inGroup: boolean;
   positions: string;
   balance: number;
   totalOwed: number;

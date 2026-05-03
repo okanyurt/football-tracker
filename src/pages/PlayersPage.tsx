@@ -5,7 +5,7 @@ import Avatar from "@/components/Avatar";
 import { UserPlus, Pencil, Trash2, ArrowDownUp, UserX } from "lucide-react";
 import { useToast } from "@/hooks/useToast";
 import type { Player } from "@/types/players";
-import { getPlayers, createPlayer, updatePlayer, deletePlayer, toggleRemovedFromGroup } from "@/services/players";
+import { getPlayers, createPlayer, updatePlayer, deletePlayer, removeFromGroup, addToGroup } from "@/services/players";
 
 export default function PlayersPage() {
   const [players, setPlayers] = useState<Player[]>([]);
@@ -14,8 +14,7 @@ export default function PlayersPage() {
   const [editPlayer, setEditPlayer] = useState<Player | null>(null);
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
-  const [isExempt, setIsExempt] = useState(false);
-  const [isGuest, setIsGuest] = useState(false);
+  const [status, setStatus] = useState<"normal" | "exempt" | "removed" | "guest">("normal");
   const [saving, setSaving] = useState(false);
   const [missedSort, setMissedSort] = useState<"none" | "desc" | "asc">("none");
   const [balanceSort, setBalanceSort] = useState<"none" | "desc" | "asc">("none");
@@ -33,32 +32,38 @@ export default function PlayersPage() {
     load();
   }, [load]);
 
+  const playerStatus = (p: Player) =>
+    p.isGuest ? "guest" : p.removedFromGroup ? "removed" : p.isExempt ? "exempt" : "normal";
+
+  // "Gruptan Çıktı" seçeneği sadece şu an grupta olan oyuncuları düzenlerken gösterilir
+  const showRemovedOption = editPlayer ? editPlayer.inGroup : false;
+
   const openAdd = () => {
-    setName("");
-    setPhone("");
-    setIsExempt(false);
-    setIsGuest(false);
-    setShowAdd(true);
+    setName(""); setPhone(""); setStatus("normal"); setShowAdd(true);
   };
 
   const openEdit = (player: Player) => {
     setEditPlayer(player);
     setName(player.name);
     setPhone(player.phone || "");
-    setIsExempt(player.isExempt);
-    setIsGuest(player.isGuest);
+    setStatus(playerStatus(player));
   };
 
   const handleSave = async () => {
     if (!name.trim()) return;
     setSaving(true);
+    const flags = {
+      isExempt: status === "exempt",
+      isGuest: status === "guest",
+      removedFromGroup: status === "removed",
+    };
     if (editPlayer) {
-      const { error } = await updatePlayer(editPlayer.id, name, phone, isExempt, undefined, isGuest);
+      const { error } = await updatePlayer(editPlayer.id, name, phone, flags.isExempt, undefined, flags.isGuest, flags.removedFromGroup);
       setSaving(false);
       if (error) { showError(error); return; }
       setEditPlayer(null);
     } else {
-      const { error } = await createPlayer(name, phone, isGuest);
+      const { error } = await createPlayer(name, phone, flags);
       setSaving(false);
       if (error) { showError(error); return; }
       setShowAdd(false);
@@ -73,8 +78,14 @@ export default function PlayersPage() {
     load();
   };
 
-  const handleToggleRemoved = async (player: Player) => {
-    const { error } = await toggleRemovedFromGroup(player);
+  const handleRemoveFromGroup = async (player: Player) => {
+    const { error } = await removeFromGroup(player);
+    if (error) { showError(error); return; }
+    load();
+  };
+
+  const handleAddToGroup = async (player: Player) => {
+    const { error } = await addToGroup(player);
     if (error) { showError(error); return; }
     load();
   };
@@ -256,7 +267,7 @@ export default function PlayersPage() {
                     </span>
                   </td>
                   <td className="px-5 py-3.5 text-right">
-                    <div className="flex gap-1 justify-end">
+                    <div className="flex gap-1 justify-end items-center">
                       <button
                         onClick={() => openEdit(player)}
                         className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
@@ -264,15 +275,19 @@ export default function PlayersPage() {
                       >
                         <Pencil size={14} />
                       </button>
-                      {!player.isGuest && (
+                      {!player.inGroup ? (
                         <button
-                          onClick={() => handleToggleRemoved(player)}
-                          className={`p-1.5 rounded-lg transition-colors ${
-                            player.removedFromGroup
-                              ? "text-slate-500 bg-slate-100 hover:text-slate-700"
-                              : "text-slate-400 hover:text-slate-600 hover:bg-slate-100"
-                          }`}
-                          title={player.removedFromGroup ? "Gruba geri al" : "Gruptan çıkart"}
+                          onClick={() => handleAddToGroup(player)}
+                          className="text-xs font-medium px-2 py-1 rounded-lg border border-emerald-200 text-emerald-600 hover:bg-emerald-50 transition-colors"
+                          title="Gruba al"
+                        >
+                          Gruba Al
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => handleRemoveFromGroup(player)}
+                          className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+                          title="Gruptan çıkart"
                         >
                           <UserX size={14} />
                         </button>
@@ -325,19 +340,33 @@ export default function PlayersPage() {
                 className="w-full border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-slate-800"
               />
             </div>
-            <button
-              type="button"
-              onClick={() => setIsGuest((v) => !v)}
-              className="flex items-center gap-3 cursor-pointer select-none py-1 w-full text-left"
-            >
-              <div className={`w-10 h-6 rounded-full flex items-center transition-colors shrink-0 ${isGuest ? "bg-amber-400" : "bg-slate-200"}`}>
-                <span className={`w-5 h-5 bg-white rounded-full shadow transition-transform mx-0.5 ${isGuest ? "translate-x-4" : "translate-x-0"}`} />
+            <div className="space-y-1.5">
+              <p className="text-xs text-slate-400 font-medium uppercase tracking-wide">Durum</p>
+              <div className={`grid gap-2 ${showRemovedOption ? "grid-cols-2" : "grid-cols-3"}`}>
+                {([
+                  { label: "Normal",         value: "normal",   color: "slate" },
+                  { label: "Muaf",           value: "exempt",   color: "blue"  },
+                  ...(showRemovedOption ? [{ label: "Gruptan Çıktı", value: "removed", color: "red" }] : []),
+                  { label: "Misafir",        value: "guest",    color: "amber" },
+                ] as { label: string; value: "normal" | "exempt" | "removed" | "guest"; color: string }[]).map(({ label, value, color }) => (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => setStatus(value)}
+                    className={`py-2 rounded-xl text-sm font-medium border transition-colors ${
+                      status === value
+                        ? color === "blue"  ? "bg-blue-50 border-blue-300 text-blue-700"
+                        : color === "red"   ? "bg-red-50 border-red-300 text-red-600"
+                        : color === "amber" ? "bg-amber-50 border-amber-300 text-amber-700"
+                        :                    "bg-slate-100 border-slate-300 text-slate-700"
+                        : "bg-white border-slate-200 text-slate-400 hover:bg-slate-50"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
               </div>
-              <div>
-                <p className="text-sm font-medium text-slate-700">Misafir</p>
-                <p className="text-xs text-slate-400">Eksik maç hesaplanmaz</p>
-              </div>
-            </button>
+            </div>
             <div className="flex gap-3 pt-1">
               <button
                 onClick={() => { setShowAdd(false); setEditPlayer(null); }}
