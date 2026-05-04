@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback } from "react";
+import { useEffect, useRef, useCallback, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import Sidebar from "@/components/Sidebar";
 
@@ -9,6 +9,15 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [collapsed, setCollapsed] = useState(() => localStorage.getItem("sidebar-collapsed") === "true");
+
+  const toggleSidebar = () => {
+    setCollapsed((v) => {
+      const next = !v;
+      localStorage.setItem("sidebar-collapsed", String(next));
+      return next;
+    });
+  };
 
   const isPublic = PUBLIC_PATHS.includes(pathname);
 
@@ -52,8 +61,8 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
 
   return (
     <>
-      <Sidebar onLogout={logout} />
-      <main className="md:ml-60 min-h-screen">
+      <Sidebar onLogout={logout} collapsed={collapsed} onToggle={toggleSidebar} />
+      <main className={`min-h-screen transition-all duration-200 ${collapsed ? "md:ml-16" : "md:ml-60"}`}>
         <div className="px-6 py-7 pb-24 md:pb-8 max-w-5xl mx-auto">{children}</div>
       </main>
     </>

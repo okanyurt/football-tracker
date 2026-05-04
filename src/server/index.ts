@@ -421,6 +421,7 @@ app.get(
           orderBy: { match: { date: "desc" } },
         },
         payments: { orderBy: { date: "desc" } },
+        playerRatings: { select: { matchId: true, rating: true } },
       },
     });
 
@@ -434,7 +435,19 @@ app.get(
       player.payments
     );
 
-    res.json({ ...player, balance, totalOwed, totalPaid, matchCount });
+    // Per-match average rating for this player
+    const ratingsByMatch: Record<string, number> = {};
+    const grouped: Record<string, number[]> = {};
+    for (const pr of player.playerRatings) {
+      if (!grouped[pr.matchId]) grouped[pr.matchId] = [];
+      grouped[pr.matchId].push(pr.rating);
+    }
+    for (const [matchId, vals] of Object.entries(grouped)) {
+      ratingsByMatch[matchId] = Math.round((vals.reduce((s, v) => s + v, 0) / vals.length) * 10) / 10;
+    }
+
+    const { playerRatings: _, ...playerData } = player;
+    res.json({ ...playerData, balance, totalOwed, totalPaid, matchCount, ratingsByMatch });
   })
 );
 

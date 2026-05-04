@@ -2,10 +2,11 @@ import { useState, useEffect, useCallback } from "react";
 import { Link } from "react-router-dom";
 import Drawer from "@/components/Drawer";
 import Avatar from "@/components/Avatar";
-import { UserPlus, Pencil, Trash2, ArrowDownUp, UserX } from "lucide-react";
+import { UserPlus, Pencil, Trash2, ArrowDownUp, UserX, FileDown } from "lucide-react";
 import { useToast } from "@/hooks/useToast";
 import type { Player } from "@/types/players";
 import { getPlayers, createPlayer, updatePlayer, deletePlayer, removeFromGroup, addToGroup } from "@/services/players";
+import { exportPlayersPdf } from "@/utils/exportPlayersPdf";
 
 export default function PlayersPage() {
   const [players, setPlayers] = useState<Player[]>([]);
@@ -106,13 +107,24 @@ export default function PlayersPage() {
           <h1 className="text-2xl font-bold text-slate-800">Players</h1>
           <p className="text-slate-500 text-sm mt-0.5">{players.length} kayıtlı oyuncu</p>
         </div>
-        <button
-          onClick={openAdd}
-          className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl font-medium text-sm transition-colors shadow-sm"
-        >
-          <UserPlus size={15} />
-          Oyuncu Ekle
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => exportPlayersPdf(players)}
+            disabled={players.length === 0}
+            className="flex items-center gap-2 border border-slate-200 text-slate-600 hover:bg-slate-50 px-4 py-2 rounded-xl font-medium text-sm transition-colors disabled:opacity-40"
+            title="PDF olarak indir"
+          >
+            <FileDown size={15} />
+            PDF
+          </button>
+          <button
+            onClick={openAdd}
+            className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl font-medium text-sm transition-colors shadow-sm"
+          >
+            <UserPlus size={15} />
+            Oyuncu Ekle
+          </button>
+        </div>
       </div>
 
       {players.length === 0 ? (

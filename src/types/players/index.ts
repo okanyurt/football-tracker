@@ -49,4 +49,5 @@ export interface AtRiskResult {
 export interface PlayerDetail extends Player {
   matchPlayers: MatchPlayerEntry[];
   payments: PaymentEntry[];
+  ratingsByMatch?: Record<string, number>;
 }
