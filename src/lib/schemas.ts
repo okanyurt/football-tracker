@@ -81,6 +81,16 @@ export const UpdateTeamsSchema = z.object({
   playerTeams: z.record(z.string(), z.number().int().min(1).max(2)).optional().nullable(),
 });
 
+export const UpdateScoreSchema = z.object({
+  team1Score: z.number().int().nonnegative().nullable().optional(),
+  team2Score: z.number().int().nonnegative().nullable().optional(),
+});
+
+export const UpdatePlayerStatsSchema = z.object({
+  goals: z.number().int().nonnegative().optional(),
+  assists: z.number().int().nonnegative().optional(),
+});
+
 // ── Payments ──────────────────────────────────────────────────────────────────
 
 export const CreatePaymentSchema = z.object({

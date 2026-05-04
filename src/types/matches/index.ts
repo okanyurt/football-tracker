@@ -1,6 +1,7 @@
 export interface BasicPlayer {
   id: string;
   name: string;
+  positions: string;
 }
 
 export interface MatchPlayer {
@@ -10,6 +11,8 @@ export interface MatchPlayer {
   isGoalkeeper: boolean;
   hasPaid: boolean;
   team: number | null;
+  goals: number;
+  assists: number;
   player: BasicPlayer;
   playerBalance: number;
 }
@@ -22,6 +25,8 @@ export interface MatchListItem {
   notes: string | null;
   cancelledAt: string | null;
   goalkeeperFree: boolean;
+  team1Score: number | null;
+  team2Score: number | null;
   matchPlayers: { isGoalkeeper: boolean; player: BasicPlayer }[];
 }
 
@@ -33,6 +38,8 @@ export interface MatchDetail {
   notes: string | null;
   team1Name: string | null;
   team2Name: string | null;
+  team1Score: number | null;
+  team2Score: number | null;
   matchPlayers: MatchPlayer[];
 }
 

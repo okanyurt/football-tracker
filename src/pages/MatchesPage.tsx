@@ -174,6 +174,11 @@ export default function MatchesPage() {
                       >
                         {match.location || "Futbol"}
                       </Link>
+                      {match.team1Score != null && match.team2Score != null && (
+                        <span className="text-sm font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-lg tabular-nums">
+                          {match.team1Score} — {match.team2Score}
+                        </span>
+                      )}
                       {match.cancelledAt && (
                         <span className="text-xs bg-red-100 text-red-500 px-2 py-0.5 rounded-full font-medium">İptal</span>
                       )}

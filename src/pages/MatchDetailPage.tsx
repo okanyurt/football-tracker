@@ -1,11 +1,11 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Link } from "react-router-dom";
 import Modal from "@/components/Modal";
 import { format } from "date-fns";
 import {
   ArrowLeft, CircleDollarSign, Users, UserPlus2, X, Pencil, Check,
-  Star, Wand2, Trash2, ChevronDown, ChevronUp, Copy, Check as CheckIcon,
+  Star, Wand2, Trash2, ChevronDown, ChevronUp, Copy, Check as CheckIcon, Trophy,
 } from "lucide-react";
 import { useToast } from "@/hooks/useToast";
 import { cycleTeam } from "@/utils/teams";
@@ -15,6 +15,7 @@ import type { Player } from "@/types/players";
 import {
   getMatch, updateTeams, addParticipants, removeParticipant,
   getMatchRatings, submitRatings, deleteRater, suggestTeams, toggleHasPaid, payFromKasa,
+  updateScore, updatePlayerStats,
 } from "@/services/matches";
 import { getPlayers } from "@/services/players";
 
@@ -38,15 +39,23 @@ export default function MatchDetailPage() {
   const [suggestingTeams, setSuggestingTeams] = useState(false);
   const [suggestionRatings, setSuggestionRatings] = useState<Record<string, number> | null>(null);
 
+  // Score editing state
+  const [editingScore, setEditingScore] = useState(false);
+  const [editScore1, setEditScore1] = useState("");
+  const [editScore2, setEditScore2] = useState("");
+  const [savingScore, setSavingScore] = useState(false);
+
   // Rating state
   const [matchRatings, setMatchRatings] = useState<MatchRatingData | null>(null);
   const [loadingRatings, setLoadingRatings] = useState(true);
   const [showRatingModal, setShowRatingModal] = useState(false);
+  const [isEditingRating, setIsEditingRating] = useState(false);
   const [raterName, setRaterName] = useState("");
   const [useCustomRater, setUseCustomRater] = useState(false);
   const [customRaterName, setCustomRaterName] = useState("");
   const [ratingInputs, setRatingInputs] = useState<Record<string, number>>({});
   const [expandedRater, setExpandedRater] = useState<string | null>(null);
+  const [confirmEditRater, setConfirmEditRater] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [copiedRater, setCopiedRater] = useState<string | null>(null);
 
@@ -73,6 +82,82 @@ export default function MatchDetailPage() {
     init();
     loadRatings();
   }, [id, navigate, loadRatings]);
+
+  // ── Award computation — only recalculates when match data or ratings change ──
+  const fmtN = useCallback((n: number) => (n % 1 === 0 ? String(n) : n.toFixed(1)), []);
+
+  type Award = { key: string; emoji: string; title: string; playerName: string; stat: string; bg: string; statColor: string };
+
+  const { awards, momRanked } = useMemo(() => {
+    if (!match) return { awards: [] as Award[], momRanked: [] as { mp: (typeof match extends null ? never : typeof match)["matchPlayers"][0]; score: number; avg: number; wb: number }[] };
+
+    const awards: Award[] = [];
+
+    // 🔥 En Skorer
+    const topScorer = [...match.matchPlayers].filter((mp) => mp.goals > 0).sort((a, b) => b.goals - a.goals)[0] ?? null;
+    if (topScorer) awards.push({ key: "scorer", emoji: "🔥", title: "En Skorer", playerName: topScorer.player.name, stat: `${topScorer.goals} gol`, bg: "bg-orange-50 border-orange-200", statColor: "text-orange-600" });
+
+    // 🎯 En Çok Asist
+    const topAssister = [...match.matchPlayers].filter((mp) => mp.assists > 0).sort((a, b) => b.assists - a.assists)[0] ?? null;
+    if (topAssister) awards.push({ key: "assist", emoji: "🎯", title: "En Çok Asist", playerName: topAssister.player.name, stat: `${topAssister.assists} asist`, bg: "bg-blue-50 border-blue-200", statColor: "text-blue-600" });
+
+    const fmt = (n: number) => (n % 1 === 0 ? String(n) : n.toFixed(1));
+
+    if (matchRatings) {
+      // 🧠 En Faydalı Oyuncu — non-GK, saf rating
+      const nonGkIds = new Set(match.matchPlayers.filter((mp) => !mp.isGoalkeeper).map((mp) => mp.playerId));
+      const topRated = [...matchRatings.players].filter((p) => p.count > 0 && nonGkIds.has(p.playerId)).sort((a, b) => b.average - a.average)[0] ?? null;
+      if (topRated) awards.push({ key: "useful", emoji: "🧠", title: "En Faydalı", playerName: topRated.playerName, stat: `${fmt(topRated.average)} puan`, bg: "bg-violet-50 border-violet-200", statColor: "text-violet-600" });
+
+      // 🧱 Savunma Duvarı — defans mevkisindeki (D) en yüksek ratingli oyuncu
+      const topDef = match.matchPlayers
+        .filter((mp) => !mp.isGoalkeeper && mp.player.positions.split(",").includes("D"))
+        .map((mp) => ({ mp, rd: matchRatings.players.find((p) => p.playerId === mp.playerId) }))
+        .filter((x) => x.rd && x.rd.count > 0)
+        .sort((a, b) => b.rd!.average - a.rd!.average)[0] ?? null;
+      if (topDef) awards.push({ key: "defense", emoji: "🧱", title: "Savunma Duvarı", playerName: topDef.mp.player.name, stat: `${fmt(topDef.rd!.average)} puan`, bg: "bg-slate-100 border-slate-300", statColor: "text-slate-600" });
+
+      // 🏆 Maçın Adamı — ağırlıklı formül
+      const fieldMPs = match.matchPlayers.filter((mp) => !mp.isGoalkeeper);
+      const momHasAssists = fieldMPs.some((mp) => mp.assists > 0);
+      const momMaxGoals = Math.max(0, ...fieldMPs.map((mp) => mp.goals));
+      const momMaxAssists = momHasAssists ? Math.max(0, ...fieldMPs.map((mp) => mp.assists)) : 0;
+      const momRW = momHasAssists ? 0.5 : 0.65;
+      const momAW = momHasAssists ? 0.15 : 0;
+      const t1Won = match.team1Score != null && match.team2Score != null && match.team1Score > match.team2Score;
+      const t2Won = match.team1Score != null && match.team2Score != null && match.team2Score > match.team1Score;
+      const momRanked = match.matchPlayers
+        .map((mp) => {
+          const rd = matchRatings.players.find((p) => p.playerId === mp.playerId);
+          if (!rd || rd.count === 0) return null;
+          const wb = (mp.team === 1 && t1Won) || (mp.team === 2 && t2Won) ? 1 : 0;
+          const score = mp.isGoalkeeper
+            ? 0.9 * (rd.average / 10) + 0.1 * wb
+            : momRW * (rd.average / 10) + 0.2 * (momMaxGoals > 0 ? mp.goals / momMaxGoals : 0) + momAW * (momMaxAssists > 0 ? mp.assists / momMaxAssists : 0) + 0.1 * wb;
+          return { mp, score, avg: rd.average, wb };
+        })
+        .filter((x): x is NonNullable<typeof x> => x !== null)
+        .sort((a, b) => b.score - a.score);
+
+      if (momRanked.length > 0) {
+        const mom = momRanked[0];
+        awards.push({ key: "mom", emoji: "🏆", title: "Maçın Adamı", playerName: mom.mp.player.name, stat: `${(mom.score * 100).toFixed(1)} puan`, bg: "bg-amber-50 border-amber-200", statColor: "text-amber-600" });
+      }
+
+      // 🧤 Maçın Kalecisi — en yüksek ratingli kaleci
+      const gkRanked = match.matchPlayers
+        .filter((mp) => mp.isGoalkeeper)
+        .map((mp) => ({ mp, rd: matchRatings.players.find((p) => p.playerId === mp.playerId) }))
+        .filter((x) => x.rd && x.rd.count > 0)
+        .sort((a, b) => b.rd!.average - a.rd!.average)[0] ?? null;
+      if (gkRanked) awards.push({ key: "gk", emoji: "🧤", title: "Maçın Kalecisi", playerName: gkRanked.mp.player.name, stat: `${fmt(gkRanked.rd!.average)} puan`, bg: "bg-teal-50 border-teal-200", statColor: "text-teal-600" });
+
+      return { awards, momRanked };
+    }
+
+    return { awards, momRanked: [] };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [match, matchRatings]);
 
   const openTeamEdit = () => {
     if (!match) return;
@@ -101,6 +186,68 @@ export default function MatchDetailPage() {
     loadMatch();
   };
 
+  const openScoreEdit = () => {
+    if (!match) return;
+    setEditScore1(match.team1Score != null ? String(match.team1Score) : "");
+    setEditScore2(match.team2Score != null ? String(match.team2Score) : "");
+    setEditingScore(true);
+  };
+
+  const saveScore = async () => {
+    if (!match) return;
+    const s1 = editScore1 === "" ? null : parseInt(editScore1, 10);
+    const s2 = editScore2 === "" ? null : parseInt(editScore2, 10);
+
+    const t1Goals = match.matchPlayers.filter((p) => p.team === 1).reduce((s, p) => s + p.goals, 0);
+    const t2Goals = match.matchPlayers.filter((p) => p.team === 2).reduce((s, p) => s + p.goals, 0);
+
+    if (s1 !== null && t1Goals > 0 && s1 > t1Goals) {
+      showError(`${match.team1Name || "Takım 1"} skoru, oyuncu gollerinin toplamını (${t1Goals}) aşamaz`);
+      return;
+    }
+    if (s2 !== null && t2Goals > 0 && s2 > t2Goals) {
+      showError(`${match.team2Name || "Takım 2"} skoru, oyuncu gollerinin toplamını (${t2Goals}) aşamaz`);
+      return;
+    }
+
+    setSavingScore(true);
+    const { error } = await updateScore(id, s1, s2);
+    setSavingScore(false);
+    if (error) { showError(error); return; }
+    setEditingScore(false);
+    loadMatch();
+  };
+
+  const handleGoalChange = async (playerId: string, delta: number) => {
+    if (!match) return;
+    const mp = match.matchPlayers.find((p) => p.playerId === playerId);
+    if (!mp) return;
+    const newGoals = Math.max(0, mp.goals + delta);
+    setMatch((prev) => prev ? {
+      ...prev,
+      matchPlayers: prev.matchPlayers.map((p) =>
+        p.playerId === playerId ? { ...p, goals: newGoals } : p
+      ),
+    } : prev);
+    const { error } = await updatePlayerStats(id, playerId, newGoals, mp.assists);
+    if (error) { showError(error); loadMatch(); }
+  };
+
+  const handleAssistChange = async (playerId: string, delta: number) => {
+    if (!match) return;
+    const mp = match.matchPlayers.find((p) => p.playerId === playerId);
+    if (!mp) return;
+    const newAssists = Math.max(0, mp.assists + delta);
+    setMatch((prev) => prev ? {
+      ...prev,
+      matchPlayers: prev.matchPlayers.map((p) =>
+        p.playerId === playerId ? { ...p, assists: newAssists } : p
+      ),
+    } : prev);
+    const { error } = await updatePlayerStats(id, playerId, mp.goals, newAssists);
+    if (error) { showError(error); loadMatch(); }
+  };
+
   const handleSuggestTeams = async () => {
     setSuggestingTeams(true);
     const { data, error } = await suggestTeams(id);
@@ -115,11 +262,30 @@ export default function MatchDetailPage() {
 
   const openRatingModal = () => {
     if (!match) return;
+    setIsEditingRating(false);
     setRaterName("");
     setUseCustomRater(false);
     setCustomRaterName("");
     const inputs: Record<string, number> = {};
     match.matchPlayers.forEach((mp) => { inputs[mp.playerId] = 5; });
+    setRatingInputs(inputs);
+    setShowRatingModal(true);
+  };
+
+  const openEditRatingModal = (rater: string) => {
+    if (!match || !matchRatings) return;
+    const inputs: Record<string, number> = {};
+    match.matchPlayers.forEach((mp) => {
+      const existing = matchRatings.players
+        .find((p) => p.playerId === mp.playerId)
+        ?.ratings.find((r) => r.raterName === rater);
+      inputs[mp.playerId] = existing?.rating ?? 5;
+    });
+    setConfirmEditRater(null);
+    setIsEditingRating(true);
+    setRaterName(rater);
+    setUseCustomRater(false);
+    setCustomRaterName("");
     setRatingInputs(inputs);
     setShowRatingModal(true);
   };
@@ -217,20 +383,42 @@ export default function MatchDetailPage() {
   const team1Avg = calcTeamAvg(team1Players);
   const team2Avg = calcTeamAvg(team2Players);
 
+
   return (
     <div className="space-y-6">
       {ToastEl}
 
-      {/* Back + Header */}
-      <div>
-        <Link to="/matches" className="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-700 transition-colors mb-4">
-          <ArrowLeft size={15} />
-          Matches
-        </Link>
-        <h1 className="text-2xl font-bold text-slate-800">
-          {match.location || "Futbol"} — {format(new Date(match.date), "d MMMM yyyy")}
-        </h1>
-        {match.notes && <p className="text-slate-400 text-sm mt-1">{match.notes}</p>}
+      {/* Back + Header + Awards — screenshot-friendly block */}
+      <div className="space-y-4">
+        <div>
+          <Link to="/matches" className="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-700 transition-colors mb-4">
+            <ArrowLeft size={15} />
+            Matches
+          </Link>
+          <h1 className="text-2xl font-bold text-slate-800">
+            {match.location || "Futbol"} — {format(new Date(match.date), "d MMMM yyyy")}
+            {match.team1Score != null && match.team2Score != null && (
+              <span className="ml-3 text-xl font-black text-slate-500 tabular-nums">
+                ({match.team1Score} — {match.team2Score})
+              </span>
+            )}
+          </h1>
+          {match.notes && <p className="text-slate-400 text-sm mt-1">{match.notes}</p>}
+        </div>
+
+        {/* ── Awards Grid ── */}
+        {awards.length > 0 && (
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            {awards.map((award) => (
+              <div key={award.key} className={`rounded-2xl border p-3.5 ${award.bg}`}>
+                <div className="text-xl mb-2 leading-none">{award.emoji}</div>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">{award.title}</p>
+                <p className="text-sm font-bold text-slate-800 truncate">{award.playerName}</p>
+                <p className={`text-xs font-semibold mt-0.5 ${award.statColor}`}>{award.stat}</p>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Stat Cards */}
@@ -257,6 +445,34 @@ export default function MatchDetailPage() {
           <p className="text-xl font-bold text-slate-800">{match.matchPlayers.length}</p>
         </div>
       </div>
+
+      {/* ── Performans Sıralaması ── */}
+      {momRanked.length > 1 && (
+        <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
+          <div className="px-5 py-4 border-b border-slate-100 flex items-center gap-2">
+            <Trophy size={15} className="text-amber-500" />
+            <h2 className="text-sm font-semibold text-slate-700">Performans Sıralaması</h2>
+          </div>
+          <div className="p-4 space-y-1">
+            {momRanked.map(({ mp, score, avg, wb }, i) => (
+              <div key={mp.playerId} className={`flex items-center gap-3 px-3 py-2 rounded-xl ${i === 0 ? "bg-amber-50 border border-amber-200" : "hover:bg-slate-50"}`}>
+                <span className={`text-xs font-bold w-4 text-right shrink-0 ${i === 0 ? "text-amber-500" : "text-slate-300"}`}>{i + 1}</span>
+                <Avatar name={mp.player.name} size="sm" />
+                <span className={`text-sm font-medium flex-1 truncate ${i === 0 ? "text-amber-700" : "text-slate-700"}`}>{mp.player.name}</span>
+                <div className="flex items-center gap-2 shrink-0">
+                  {mp.goals > 0 && <span className="text-[11px] text-emerald-600 font-semibold">{mp.goals}G</span>}
+                  {mp.assists > 0 && <span className="text-[11px] text-blue-500 font-semibold">{mp.assists}A</span>}
+                  {wb === 1 && <span className="text-[10px] text-amber-500 font-bold">W</span>}
+                  <span className={`text-xs font-bold px-2 py-0.5 rounded-lg ${i === 0 ? "bg-amber-200 text-amber-800" : "bg-slate-100 text-slate-600"}`}>
+                    {(score * 100).toFixed(1)}
+                  </span>
+                  <span className="text-[11px] text-slate-400 w-6 text-right">{fmtN(avg)}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* ── Puanlamalar Section ── */}
       <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
@@ -376,37 +592,64 @@ export default function MatchDetailPage() {
                           <span className="text-xs font-bold text-violet-700">{rater[0].toUpperCase()}</span>
                         </div>
                         <span className="text-sm font-semibold text-slate-700 flex-1">{rater}</span>
-                        <span className="text-xs text-slate-400">{raterData.length} oyuncu</span>
-                        <button
-                          onClick={() => {
-                            const text =
-                              `${rater}:\n` +
-                              [...raterData]
-                                .sort((a, b) => a.player.playerName.localeCompare(b.player.playerName, "tr"))
-                                .map(({ player, entry }) => `${player.playerName}: ${entry!.rating}`)
-                                .join("\n");
-                            navigator.clipboard.writeText(text);
-                            setCopiedRater(rater);
-                            setTimeout(() => setCopiedRater(null), 2000);
-                          }}
-                          className="p-1 text-slate-400 hover:text-slate-600 transition-colors"
-                          title="Kopyala"
-                        >
-                          {copiedRater === rater ? <CheckIcon size={13} className="text-emerald-600" /> : <Copy size={13} />}
-                        </button>
-                        <button
-                          onClick={() => setExpandedRater(isExpanded ? null : rater)}
-                          className="p-1 text-slate-400 hover:text-slate-600"
-                        >
-                          {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-                        </button>
-                        <button
-                          onClick={() => handleDeleteRater(rater)}
-                          className="p-1 text-slate-300 hover:text-red-500 transition-colors"
-                          title="Puanlamayı sil"
-                        >
-                          <Trash2 size={14} />
-                        </button>
+                        {confirmEditRater === rater ? (
+                          <div className="flex items-center gap-1.5 ml-auto">
+                            <span className="text-xs text-slate-500">Değiştirmek istiyor musunuz?</span>
+                            <button
+                              onClick={() => openEditRatingModal(rater)}
+                              className="text-xs bg-violet-600 text-white px-2.5 py-1 rounded-lg hover:bg-violet-700 font-medium"
+                            >
+                              Evet
+                            </button>
+                            <button
+                              onClick={() => setConfirmEditRater(null)}
+                              className="text-xs border border-slate-200 text-slate-500 px-2.5 py-1 rounded-lg hover:bg-slate-50 font-medium"
+                            >
+                              Hayır
+                            </button>
+                          </div>
+                        ) : (
+                          <>
+                            <span className="text-xs text-slate-400">{raterData.length} oyuncu</span>
+                            <button
+                              onClick={() => {
+                                const text =
+                                  `${rater}:\n` +
+                                  [...raterData]
+                                    .sort((a, b) => a.player.playerName.localeCompare(b.player.playerName, "tr"))
+                                    .map(({ player, entry }) => `${player.playerName}: ${entry!.rating}`)
+                                    .join("\n");
+                                navigator.clipboard.writeText(text);
+                                setCopiedRater(rater);
+                                setTimeout(() => setCopiedRater(null), 2000);
+                              }}
+                              className="p-1 text-slate-400 hover:text-slate-600 transition-colors"
+                              title="Kopyala"
+                            >
+                              {copiedRater === rater ? <CheckIcon size={13} className="text-emerald-600" /> : <Copy size={13} />}
+                            </button>
+                            <button
+                              onClick={() => setConfirmEditRater(rater)}
+                              className="p-1 text-slate-300 hover:text-violet-500 transition-colors"
+                              title="Puanları düzenle"
+                            >
+                              <Pencil size={13} />
+                            </button>
+                            <button
+                              onClick={() => setExpandedRater(isExpanded ? null : rater)}
+                              className="p-1 text-slate-400 hover:text-slate-600"
+                            >
+                              {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                            </button>
+                            <button
+                              onClick={() => handleDeleteRater(rater)}
+                              className="p-1 text-slate-300 hover:text-red-500 transition-colors"
+                              title="Puanlamayı sil"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </>
+                        )}
                       </div>
                       {isExpanded && (
                         <div className="px-4 pb-3 pt-1 bg-slate-50 border-t border-slate-100">
@@ -443,6 +686,50 @@ export default function MatchDetailPage() {
           <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
             <h2 className="text-sm font-semibold text-slate-700">Takımlar</h2>
             <div className="flex items-center gap-3">
+              {hasTeams && !editingScore && (
+                <button
+                  onClick={openScoreEdit}
+                  className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-700 font-medium"
+                >
+                  <Pencil size={13} />
+                  Skor
+                </button>
+              )}
+              {editingScore && (
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    min={0}
+                    value={editScore1}
+                    onChange={(e) => setEditScore1(e.target.value)}
+                    placeholder="0"
+                    className="w-14 border border-blue-200 bg-blue-50 text-blue-700 rounded-lg px-2 py-1 text-sm font-bold text-center focus:outline-none focus:ring-2 focus:ring-blue-400"
+                  />
+                  <span className="text-slate-400 font-bold">—</span>
+                  <input
+                    type="number"
+                    min={0}
+                    value={editScore2}
+                    onChange={(e) => setEditScore2(e.target.value)}
+                    placeholder="0"
+                    className="w-14 border border-orange-200 bg-orange-50 text-orange-700 rounded-lg px-2 py-1 text-sm font-bold text-center focus:outline-none focus:ring-2 focus:ring-orange-400"
+                  />
+                  <button
+                    onClick={saveScore}
+                    disabled={savingScore}
+                    className="flex items-center gap-1 text-xs bg-emerald-600 text-white px-2.5 py-1 rounded-lg hover:bg-emerald-700 disabled:opacity-50"
+                  >
+                    <Check size={12} />
+                    Kaydet
+                  </button>
+                  <button
+                    onClick={() => setEditingScore(false)}
+                    className="text-xs border border-slate-200 text-slate-500 px-2.5 py-1 rounded-lg hover:bg-slate-50"
+                  >
+                    Vazgeç
+                  </button>
+                </div>
+              )}
               {hasTeams && (
                 <button
                   onClick={() => {
@@ -486,82 +773,114 @@ export default function MatchDetailPage() {
               </button>
             </div>
           ) : (
-            <div className="p-5 grid sm:grid-cols-2 gap-4">
-              {/* Team 1 */}
-              <div className="rounded-xl border border-blue-100 bg-blue-50/50 overflow-hidden">
-                <div className="px-4 py-2.5 bg-blue-100/60 border-b border-blue-100 flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-bold text-blue-700">{t1Name}</p>
-                    <p className="text-xs text-blue-400">{team1Players.length} oyuncu</p>
+            <div className="p-5 space-y-4">
+              {(match.team1Score != null || match.team2Score != null) && (
+                <div className="flex items-center justify-center gap-4 py-2">
+                  <span className="text-blue-700 font-semibold text-sm">{t1Name}</span>
+                  <div className="flex items-center gap-2 bg-slate-100 rounded-xl px-4 py-1.5">
+                    <span className="text-2xl font-black text-blue-700 min-w-[1.5rem] text-center">{match.team1Score ?? 0}</span>
+                    <span className="text-slate-400 font-bold text-lg">—</span>
+                    <span className="text-2xl font-black text-orange-600 min-w-[1.5rem] text-center">{match.team2Score ?? 0}</span>
                   </div>
-                  {team1Avg !== null && (
-                    <span className="text-xs font-bold bg-blue-200 text-blue-800 px-2 py-1 rounded-lg">
-                      ⌀ {team1Avg % 1 === 0 ? team1Avg : team1Avg.toFixed(1)}
-                    </span>
-                  )}
+                  <span className="text-orange-600 font-semibold text-sm">{t2Name}</span>
                 </div>
-                <div className="p-3 space-y-1.5">
-                  {team1Players.length === 0 ? (
-                    <p className="text-xs text-slate-400 px-1">Oyuncu yok</p>
-                  ) : [...team1Players].sort((a, b) => Number(b.isGoalkeeper) - Number(a.isGoalkeeper)).map((mp) => {
-                    const avg = matchRatings?.players.find((p) => p.playerId === mp.playerId);
-                    const isTop = mp.playerId === topPlayerId;
-                    return (
-                      <div key={mp.id} className={`flex items-center gap-2.5 px-2 py-1.5 rounded-lg border ${isTop ? "bg-emerald-50 border-emerald-200" : "bg-white border-blue-100"}`}>
-                        <Avatar name={mp.player.name} size="sm" />
-                        <span className="text-sm font-medium text-slate-700 flex-1">{mp.player.name}</span>
-                        {mp.isGoalkeeper && <span className="text-[10px] font-bold bg-yellow-100 text-yellow-700 border border-yellow-200 px-1.5 py-0.5 rounded-md">GK</span>}
-                        {avg && avg.count > 0 && (
-                          <div className="flex items-center gap-1">
-                            <span className={`text-[11px] font-bold border px-1.5 py-0.5 rounded-md ${isTop ? "bg-emerald-500 text-white border-emerald-600" : "bg-violet-100 text-violet-700 border-violet-200"}`}>
-                              {avg.average % 1 === 0 ? avg.average : avg.average.toFixed(1)}
-                            </span>
-                            {isTop && <Star size={11} className="text-emerald-500 fill-emerald-400" />}
-                          </div>
-                        )}
+              )}
+            <div className="grid sm:grid-cols-2 gap-4">
+              {/* Team 1 */}
+              {(() => {
+                const team1Goals = team1Players.reduce((s, p) => s + p.goals, 0);
+                return (
+                  <div className="rounded-xl border border-blue-100 bg-blue-50/50 overflow-hidden">
+                    <div className="px-4 py-2.5 bg-blue-100/60 border-b border-blue-100 flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-bold text-blue-700">{t1Name}</p>
+                        <p className="text-xs text-blue-400">
+                          {team1Players.length} oyuncu
+                          {team1Goals > 0 && <span className="ml-1.5 font-semibold text-emerald-600">· {team1Goals} gol</span>}
+                        </p>
                       </div>
-                    );
-                  })}
-                </div>
-              </div>
+                      {team1Avg !== null && (
+                        <span className="text-xs font-bold bg-blue-200 text-blue-800 px-2 py-1 rounded-lg">
+                          ⌀ {team1Avg % 1 === 0 ? team1Avg : team1Avg.toFixed(1)}
+                        </span>
+                      )}
+                    </div>
+                    <div className="p-3 space-y-1.5">
+                      {team1Players.length === 0 ? (
+                        <p className="text-xs text-slate-400 px-1">Oyuncu yok</p>
+                      ) : [...team1Players].sort((a, b) => Number(b.isGoalkeeper) - Number(a.isGoalkeeper)).map((mp) => {
+                        const avg = matchRatings?.players.find((p) => p.playerId === mp.playerId);
+                        const isTop = mp.playerId === topPlayerId;
+                        return (
+                          <div key={mp.id} className={`flex items-center gap-2 px-2 py-1.5 rounded-lg border ${isTop ? "bg-emerald-50 border-emerald-200" : "bg-white border-blue-100"}`}>
+                            <Avatar name={mp.player.name} size="sm" />
+                            <span className="text-sm font-medium text-slate-700 flex-1 min-w-0 truncate">{mp.player.name}</span>
+                            {mp.isGoalkeeper && <span className="text-[10px] font-bold bg-yellow-100 text-yellow-700 border border-yellow-200 px-1.5 py-0.5 rounded-md shrink-0">GK</span>}
+                            {avg && avg.count > 0 && (
+                              <span className={`text-[11px] font-bold border px-1.5 py-0.5 rounded-md shrink-0 ${isTop ? "bg-emerald-500 text-white border-emerald-600" : "bg-violet-100 text-violet-700 border-violet-200"}`}>
+                                {avg.average % 1 === 0 ? avg.average : avg.average.toFixed(1)}
+                              </span>
+                            )}
+                            <div className="inline-flex items-center gap-0.5 shrink-0">
+                              <button onClick={() => handleGoalChange(mp.playerId, -1)} disabled={mp.goals === 0} className="w-5 h-5 rounded flex items-center justify-center text-slate-400 hover:text-slate-600 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed text-xs font-bold">−</button>
+                              <span className={`w-5 text-center text-sm font-bold ${mp.goals > 0 ? "text-emerald-600" : "text-slate-300"}`}>{mp.goals}</span>
+                              <button onClick={() => handleGoalChange(mp.playerId, 1)} className="w-5 h-5 rounded flex items-center justify-center text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 text-xs font-bold">+</button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* Team 2 */}
-              <div className="rounded-xl border border-orange-100 bg-orange-50/50 overflow-hidden">
-                <div className="px-4 py-2.5 bg-orange-100/60 border-b border-orange-100 flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-bold text-orange-700">{t2Name}</p>
-                    <p className="text-xs text-orange-400">{team2Players.length} oyuncu</p>
-                  </div>
-                  {team2Avg !== null && (
-                    <span className="text-xs font-bold bg-orange-200 text-orange-800 px-2 py-1 rounded-lg">
-                      ⌀ {team2Avg % 1 === 0 ? team2Avg : team2Avg.toFixed(1)}
-                    </span>
-                  )}
-                </div>
-                <div className="p-3 space-y-1.5">
-                  {team2Players.length === 0 ? (
-                    <p className="text-xs text-slate-400 px-1">Oyuncu yok</p>
-                  ) : [...team2Players].sort((a, b) => Number(b.isGoalkeeper) - Number(a.isGoalkeeper)).map((mp) => {
-                    const avg = matchRatings?.players.find((p) => p.playerId === mp.playerId);
-                    const isTop = mp.playerId === topPlayerId;
-                    return (
-                      <div key={mp.id} className={`flex items-center gap-2.5 px-2 py-1.5 rounded-lg border ${isTop ? "bg-emerald-50 border-emerald-200" : "bg-white border-orange-100"}`}>
-                        <Avatar name={mp.player.name} size="sm" />
-                        <span className="text-sm font-medium text-slate-700 flex-1">{mp.player.name}</span>
-                        {mp.isGoalkeeper && <span className="text-[10px] font-bold bg-yellow-100 text-yellow-700 border border-yellow-200 px-1.5 py-0.5 rounded-md">GK</span>}
-                        {avg && avg.count > 0 && (
-                          <div className="flex items-center gap-1">
-                            <span className={`text-[11px] font-bold border px-1.5 py-0.5 rounded-md ${isTop ? "bg-emerald-500 text-white border-emerald-600" : "bg-violet-100 text-violet-700 border-violet-200"}`}>
-                              {avg.average % 1 === 0 ? avg.average : avg.average.toFixed(1)}
-                            </span>
-                            {isTop && <Star size={11} className="text-emerald-500 fill-emerald-400" />}
-                          </div>
-                        )}
+              {(() => {
+                const team2Goals = team2Players.reduce((s, p) => s + p.goals, 0);
+                return (
+                  <div className="rounded-xl border border-orange-100 bg-orange-50/50 overflow-hidden">
+                    <div className="px-4 py-2.5 bg-orange-100/60 border-b border-orange-100 flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-bold text-orange-700">{t2Name}</p>
+                        <p className="text-xs text-orange-400">
+                          {team2Players.length} oyuncu
+                          {team2Goals > 0 && <span className="ml-1.5 font-semibold text-emerald-600">· {team2Goals} gol</span>}
+                        </p>
                       </div>
-                    );
-                  })}
-                </div>
-              </div>
+                      {team2Avg !== null && (
+                        <span className="text-xs font-bold bg-orange-200 text-orange-800 px-2 py-1 rounded-lg">
+                          ⌀ {team2Avg % 1 === 0 ? team2Avg : team2Avg.toFixed(1)}
+                        </span>
+                      )}
+                    </div>
+                    <div className="p-3 space-y-1.5">
+                      {team2Players.length === 0 ? (
+                        <p className="text-xs text-slate-400 px-1">Oyuncu yok</p>
+                      ) : [...team2Players].sort((a, b) => Number(b.isGoalkeeper) - Number(a.isGoalkeeper)).map((mp) => {
+                        const avg = matchRatings?.players.find((p) => p.playerId === mp.playerId);
+                        const isTop = mp.playerId === topPlayerId;
+                        return (
+                          <div key={mp.id} className={`flex items-center gap-2 px-2 py-1.5 rounded-lg border ${isTop ? "bg-emerald-50 border-emerald-200" : "bg-white border-orange-100"}`}>
+                            <Avatar name={mp.player.name} size="sm" />
+                            <span className="text-sm font-medium text-slate-700 flex-1 min-w-0 truncate">{mp.player.name}</span>
+                            {mp.isGoalkeeper && <span className="text-[10px] font-bold bg-yellow-100 text-yellow-700 border border-yellow-200 px-1.5 py-0.5 rounded-md shrink-0">GK</span>}
+                            {avg && avg.count > 0 && (
+                              <span className={`text-[11px] font-bold border px-1.5 py-0.5 rounded-md shrink-0 ${isTop ? "bg-emerald-500 text-white border-emerald-600" : "bg-violet-100 text-violet-700 border-violet-200"}`}>
+                                {avg.average % 1 === 0 ? avg.average : avg.average.toFixed(1)}
+                              </span>
+                            )}
+                            <div className="inline-flex items-center gap-0.5 shrink-0">
+                              <button onClick={() => handleGoalChange(mp.playerId, -1)} disabled={mp.goals === 0} className="w-5 h-5 rounded flex items-center justify-center text-slate-400 hover:text-slate-600 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed text-xs font-bold">−</button>
+                              <span className={`w-5 text-center text-sm font-bold ${mp.goals > 0 ? "text-emerald-600" : "text-slate-300"}`}>{mp.goals}</span>
+                              <button onClick={() => handleGoalChange(mp.playerId, 1)} className="w-5 h-5 rounded flex items-center justify-center text-slate-400 hover:text-orange-500 hover:bg-orange-50 text-xs font-bold">+</button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* Unassigned */}
               {unassigned.length > 0 && (
@@ -580,6 +899,7 @@ export default function MatchDetailPage() {
                   </div>
                 </div>
               )}
+            </div>
             </div>
           )}
         </div>
@@ -699,10 +1019,24 @@ export default function MatchDetailPage() {
           </div>
         ) : (
           <table className="w-full">
+            {(() => {
+              const totalGoals = match.matchPlayers.reduce((s, p) => s + p.goals, 0);
+              const totalAssists = match.matchPlayers.reduce((s, p) => s + p.assists, 0);
+              const balanced = totalGoals === totalAssists;
+              const hasAny = totalGoals > 0 || totalAssists > 0;
+              return hasAny ? (
+                <div className={`px-5 py-2 text-xs font-medium flex items-center gap-2 ${balanced ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>
+                  <span>{balanced ? "✓" : "!"}</span>
+                  <span>Toplam gol: <strong>{totalGoals}</strong> · Toplam asist: <strong>{totalAssists}</strong></span>
+                  {!balanced && <span className="ml-auto">Gol ve asist sayısı eşit değil</span>}
+                </div>
+              ) : null;
+            })()}
             <thead className="bg-slate-50 border-b border-slate-100">
               <tr>
                 <th className="text-left px-5 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">Oyuncu</th>
                 <th className="text-center px-3 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">Ort.</th>
+                <th className="text-center px-2 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">Asist</th>
                 <th className="text-right px-5 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">Borç</th>
                 <th className="px-5 py-3" />
               </tr>
@@ -738,6 +1072,22 @@ export default function MatchDetailPage() {
                       ) : (
                         <span className="text-slate-300 text-sm">—</span>
                       )}
+                    </td>
+                    <td className="px-2 py-3.5 text-center">
+                      <div className="inline-flex items-center gap-1">
+                        <button
+                          onClick={() => handleAssistChange(mp.playerId, -1)}
+                          disabled={mp.assists === 0}
+                          className="w-5 h-5 rounded flex items-center justify-center text-slate-400 hover:text-slate-600 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed text-xs font-bold leading-none"
+                        >−</button>
+                        <span className={`w-5 text-center text-sm font-bold ${mp.assists > 0 ? "text-blue-600" : "text-slate-300"}`}>
+                          {mp.assists}
+                        </span>
+                        <button
+                          onClick={() => handleAssistChange(mp.playerId, 1)}
+                          className="w-5 h-5 rounded flex items-center justify-center text-slate-400 hover:text-blue-600 hover:bg-blue-50 text-xs font-bold leading-none"
+                        >+</button>
+                      </div>
                     </td>
                     <td className="px-5 py-3.5 text-right">
                       <div className="flex items-center justify-end gap-2">
@@ -797,70 +1147,82 @@ export default function MatchDetailPage() {
 
       {/* ── Rating Modal ── */}
       {showRatingModal && (
-        <Modal title="Puan Gir" onClose={() => setShowRatingModal(false)}>
+        <Modal title={isEditingRating ? "Puanları Düzenle" : "Puan Gir"} onClose={() => { setShowRatingModal(false); setIsEditingRating(false); }}>
           <div className="flex flex-col gap-4">
-            {/* Rater Selection */}
-            <div>
-              <label className="block text-xs font-semibold text-slate-500 mb-2">
-                Puanlayan Kim?
-                {!useCustomRater && !raterName && (
-                  <span className="ml-2 text-violet-500 font-normal">← birini seç</span>
-                )}
-              </label>
-              <div className="grid grid-cols-3 gap-2">
-                {[...match.matchPlayers]
-                  .sort((a, b) => a.player.name.localeCompare(b.player.name))
-                  .map((mp) => {
-                    const selected = !useCustomRater && raterName === mp.player.name;
-                    return (
-                      <button
-                        key={mp.playerId}
-                        type="button"
-                        onClick={() => { setRaterName(mp.player.name); setUseCustomRater(false); }}
-                        className={`flex flex-col items-center gap-1 px-2 py-2.5 rounded-xl border text-center transition-colors ${
-                          selected
-                            ? "bg-violet-600 border-violet-600 text-white"
-                            : "bg-slate-50 border-slate-200 hover:bg-slate-100 text-slate-700"
-                        }`}
-                      >
-                        <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 ${
-                          selected ? "bg-white/20 text-white" : "bg-violet-100 text-violet-700"
-                        }`}>
-                          {mp.player.name[0].toUpperCase()}
-                        </div>
-                        <span className="text-xs font-medium leading-tight line-clamp-2 w-full">{mp.player.name}</span>
-                      </button>
-                    );
-                  })}
-                {/* Diğer */}
-                <button
-                  type="button"
-                  onClick={() => { setUseCustomRater(true); setRaterName(""); }}
-                  className={`flex flex-col items-center gap-1 px-2 py-2.5 rounded-xl border text-center transition-colors ${
-                    useCustomRater
-                      ? "bg-slate-700 border-slate-700 text-white"
-                      : "bg-slate-50 border-slate-200 hover:bg-slate-100 text-slate-500"
-                  }`}
-                >
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${
-                    useCustomRater ? "bg-white/20 text-white" : "bg-slate-200 text-slate-500"
-                  }`}>
-                    +
-                  </div>
-                  <span className="text-xs font-medium">Diğer</span>
-                </button>
+            {/* Rater — edit modunda kilitli, yeni girişte seçilebilir */}
+            {isEditingRating ? (
+              <div className="flex items-center gap-3 px-3 py-2.5 bg-violet-50 border border-violet-200 rounded-xl">
+                <div className="w-8 h-8 rounded-full bg-violet-600 flex items-center justify-center text-xs font-bold text-white flex-shrink-0">
+                  {raterName[0]?.toUpperCase()}
+                </div>
+                <div>
+                  <p className="text-xs text-violet-400 font-medium">Düzenlenen puanlama</p>
+                  <p className="text-sm font-semibold text-violet-700">{raterName}</p>
+                </div>
               </div>
-              {useCustomRater && (
-                <input
-                  type="text"
-                  value={customRaterName}
-                  onChange={(e) => setCustomRaterName(e.target.value)}
-                  placeholder="Adını gir"
-                  className="mt-2 w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-violet-400"
-                  autoFocus
-                />
-              )}
-            </div>
+            ) : (
+              <div>
+                <label className="block text-xs font-semibold text-slate-500 mb-2">
+                  Puanlayan Kim?
+                  {!useCustomRater && !raterName && (
+                    <span className="ml-2 text-violet-500 font-normal">← birini seç</span>
+                  )}
+                </label>
+                <div className="grid grid-cols-3 gap-2">
+                  {[...match.matchPlayers]
+                    .sort((a, b) => a.player.name.localeCompare(b.player.name))
+                    .map((mp) => {
+                      const selected = !useCustomRater && raterName === mp.player.name;
+                      return (
+                        <button
+                          key={mp.playerId}
+                          type="button"
+                          onClick={() => { setRaterName(mp.player.name); setUseCustomRater(false); }}
+                          className={`flex flex-col items-center gap-1 px-2 py-2.5 rounded-xl border text-center transition-colors ${
+                            selected
+                              ? "bg-violet-600 border-violet-600 text-white"
+                              : "bg-slate-50 border-slate-200 hover:bg-slate-100 text-slate-700"
+                          }`}
+                        >
+                          <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 ${
+                            selected ? "bg-white/20 text-white" : "bg-violet-100 text-violet-700"
+                          }`}>
+                            {mp.player.name[0].toUpperCase()}
+                          </div>
+                          <span className="text-xs font-medium leading-tight line-clamp-2 w-full">{mp.player.name}</span>
+                        </button>
+                      );
+                    })}
+                  {/* Diğer */}
+                  <button
+                    type="button"
+                    onClick={() => { setUseCustomRater(true); setRaterName(""); }}
+                    className={`flex flex-col items-center gap-1 px-2 py-2.5 rounded-xl border text-center transition-colors ${
+                      useCustomRater
+                        ? "bg-slate-700 border-slate-700 text-white"
+                        : "bg-slate-50 border-slate-200 hover:bg-slate-100 text-slate-500"
+                    }`}
+                  >
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${
+                      useCustomRater ? "bg-white/20 text-white" : "bg-slate-200 text-slate-500"
+                    }`}>
+                      +
+                    </div>
+                    <span className="text-xs font-medium">Diğer</span>
+                  </button>
+                </div>
+                {useCustomRater && (
+                  <input
+                    type="text"
+                    value={customRaterName}
+                    onChange={(e) => setCustomRaterName(e.target.value)}
+                    placeholder="Adını gir"
+                    className="mt-2 w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-violet-400"
+                    autoFocus
+                  />
+                )}
+              </div>
+            )}
 
             {/* Player Ratings */}
             <div>
@@ -904,17 +1266,17 @@ export default function MatchDetailPage() {
             {/* Sticky footer buttons */}
             <div className="sticky bottom-0 bg-white pt-2 flex gap-3">
               <button
-                onClick={() => setShowRatingModal(false)}
+                onClick={() => { setShowRatingModal(false); setIsEditingRating(false); }}
                 className="flex-1 border border-slate-200 text-slate-600 py-2.5 rounded-xl hover:bg-slate-50 text-sm font-medium"
               >
                 İptal
               </button>
               <button
                 onClick={handleSubmitRatings}
-                disabled={saving || (useCustomRater ? !customRaterName.trim() : !raterName.trim())}
+                disabled={saving || (isEditingRating ? false : useCustomRater ? !customRaterName.trim() : !raterName.trim())}
                 className="flex-1 bg-violet-600 text-white py-2.5 rounded-xl hover:bg-violet-700 disabled:opacity-50 text-sm font-medium"
               >
-                {saving ? "Kaydediliyor..." : "Kaydet"}
+                {saving ? "Kaydediliyor..." : isEditingRating ? "Güncelle" : "Kaydet"}
               </button>
             </div>
           </div>

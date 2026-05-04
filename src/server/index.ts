@@ -29,6 +29,8 @@ import {
   SubmitRatingsSchema,
   UpdatePlayerSchema,
   UpdateTeamsSchema,
+  UpdateScoreSchema,
+  UpdatePlayerStatsSchema,
   parseBody,
 } from "@/lib/schemas";
 
@@ -421,7 +423,7 @@ app.get(
           orderBy: { match: { date: "desc" } },
         },
         payments: { orderBy: { date: "desc" } },
-        playerRatings: { select: { matchId: true, rating: true } },
+        playerRatings: { select: { matchId: true, rating: true, raterName: true } },
       },
     });
 
@@ -439,6 +441,7 @@ app.get(
     const ratingsByMatch: Record<string, number> = {};
     const grouped: Record<string, number[]> = {};
     for (const pr of player.playerRatings) {
+      if (pr.raterName === player.name) continue;
       if (!grouped[pr.matchId]) grouped[pr.matchId] = [];
       grouped[pr.matchId].push(pr.rating);
     }
@@ -677,6 +680,59 @@ app.patch(
   })
 );
 
+app.patch(
+  "/api/matches/:id/score",
+  asyncRoute(async (req, res) => {
+    const parsed = parseBody(UpdateScoreSchema, req.body);
+    if (!parsed.ok) {
+      res.status(400).json({ error: parsed.error });
+      return;
+    }
+
+    const match = await prisma.match.findFirst({ where: { id: req.params.id, deletedAt: null } });
+    if (!match) {
+      res.status(404).json({ error: "Not found" });
+      return;
+    }
+
+    const updated = await prisma.match.update({
+      where: { id: req.params.id },
+      data: {
+        team1Score: parsed.data.team1Score ?? null,
+        team2Score: parsed.data.team2Score ?? null,
+      },
+    });
+    res.json(updated);
+  })
+);
+
+app.patch(
+  "/api/matches/:matchId/participants/:playerId/stats",
+  asyncRoute(async (req, res) => {
+    const parsed = parseBody(UpdatePlayerStatsSchema, req.body);
+    if (!parsed.ok) {
+      res.status(400).json({ error: parsed.error });
+      return;
+    }
+
+    const { matchId, playerId } = req.params;
+    const mp = await prisma.matchPlayer.findFirst({ where: { matchId, playerId } });
+    if (!mp) {
+      res.status(404).json({ error: "Not found" });
+      return;
+    }
+
+    const updated = await prisma.matchPlayer.update({
+      where: { id: mp.id },
+      data: {
+        ...(parsed.data.goals !== undefined && { goals: parsed.data.goals }),
+        ...(parsed.data.assists !== undefined && { assists: parsed.data.assists }),
+      },
+    });
+    res.json(updated);
+  })
+);
+
 app.post(
   "/api/matches/:id/participants",
   asyncRoute(async (req, res) => {
@@ -847,7 +903,7 @@ function buildRatingData(
 ) {
   const raterSet = new Set(allRatings.map((r) => r.raterName));
   const players = matchPlayers.map(({ playerId, player }) => {
-    const pr = allRatings.filter((r) => r.playerId === playerId);
+    const pr = allRatings.filter((r) => r.playerId === playerId && r.raterName !== player.name);
     const avg = pr.length > 0 ? pr.reduce((s, r) => s + r.rating, 0) / pr.length : 0;
     return {
       playerId,

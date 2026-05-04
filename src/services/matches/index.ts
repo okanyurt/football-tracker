@@ -93,3 +93,21 @@ export async function suggestTeams(matchId: string): Promise<Result<SuggestTeams
   const res = await fetch(`/api/matches/${matchId}/suggest-teams`);
   return handle(res, "Takım önerisi alınamadı");
 }
+
+export async function updateScore(matchId: string, team1Score: number | null, team2Score: number | null): Promise<Result<MatchDetail>> {
+  const res = await fetch(`/api/matches/${matchId}/score`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ team1Score, team2Score }),
+  });
+  return handle(res, "Skor kaydedilemedi");
+}
+
+export async function updatePlayerStats(matchId: string, playerId: string, goals: number, assists: number): Promise<Result<void>> {
+  const res = await fetch(`/api/matches/${matchId}/participants/${playerId}/stats`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ goals, assists }),
+  });
+  return handle(res, "Oyuncu istatistikleri kaydedilemedi");
+}
