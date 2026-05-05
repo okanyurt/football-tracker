@@ -7,7 +7,7 @@ import { useToast } from "@/hooks/useToast";
 import { cycleTeam } from "@/utils/teams";
 import type { MatchListItem } from "@/types/matches";
 import type { Player } from "@/types/players";
-import { getMatches, createMatch, toggleCancelMatch } from "@/services/matches";
+import { getMatches, createMatch, toggleCancelMatch, togglePlayedMatch } from "@/services/matches";
 import { getPlayers } from "@/services/players";
 
 export default function MatchesPage() {
@@ -109,6 +109,15 @@ export default function MatchesPage() {
     load();
   };
 
+  const handlePlayed = async (match: MatchListItem) => {
+    const isPlayed = !!match.playedAt;
+    const msg = isPlayed ? "Maçın oynanma durumu geri alınsın mı?" : "Maçı oynandı olarak işaretlemek istiyor musun?";
+    if (!confirm(msg)) return;
+    const { error } = await togglePlayedMatch(match.id);
+    if (error) { showError(error); return; }
+    load();
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -150,19 +159,22 @@ export default function MatchesPage() {
               : match.matchPlayers.length;
             const perPlayerCost = payingCount > 0 ? (match.totalCost / payingCount).toFixed(0) : "0";
 
+            const isPlayed = !!match.playedAt;
+            const isCancelled = !!match.cancelledAt;
+
             return (
               <div
                 key={match.id}
                 className={`bg-white rounded-2xl border p-5 flex items-center justify-between transition-all shadow-sm ${
-                  match.cancelledAt ? "opacity-50 border-slate-200" : "border-slate-200 hover:border-emerald-200 hover:shadow-md"
+                  isCancelled ? "opacity-50 border-slate-200" : "border-slate-200 hover:border-emerald-200 hover:shadow-md"
                 }`}
               >
                 <div className="flex items-center gap-4">
-                  <div className={`rounded-xl p-3 text-center min-w-[56px] ${match.cancelledAt ? "bg-slate-100" : "bg-emerald-50"}`}>
-                    <p className={`text-xs font-bold uppercase ${match.cancelledAt ? "text-slate-400" : "text-emerald-600"}`}>
+                  <div className={`rounded-xl p-3 text-center min-w-[56px] ${isCancelled ? "bg-slate-100" : isPlayed ? "bg-blue-50" : "bg-emerald-50"}`}>
+                    <p className={`text-xs font-bold uppercase ${isCancelled ? "text-slate-400" : isPlayed ? "text-blue-500" : "text-emerald-600"}`}>
                       {format(new Date(match.date), "MMM")}
                     </p>
-                    <p className={`text-xl font-bold leading-tight ${match.cancelledAt ? "text-slate-400" : "text-emerald-800"}`}>
+                    <p className={`text-xl font-bold leading-tight ${isCancelled ? "text-slate-400" : isPlayed ? "text-blue-700" : "text-emerald-800"}`}>
                       {format(new Date(match.date), "d")}
                     </p>
                   </div>
@@ -170,7 +182,7 @@ export default function MatchesPage() {
                     <div className="flex items-center gap-2 flex-wrap">
                       <Link
                         to={`/matches/${match.id}`}
-                        className={`font-semibold text-base ${match.cancelledAt ? "line-through text-slate-400" : "text-slate-800 hover:text-emerald-600"}`}
+                        className={`font-semibold text-base ${isCancelled ? "line-through text-slate-400" : "text-slate-800 hover:text-emerald-600"}`}
                       >
                         {match.location || "Futbol"}
                       </Link>
@@ -179,11 +191,11 @@ export default function MatchesPage() {
                           {match.team1Score} — {match.team2Score}
                         </span>
                       )}
-                      {match.cancelledAt && (
+                      {isCancelled && (
                         <span className="text-xs bg-red-100 text-red-500 px-2 py-0.5 rounded-full font-medium">İptal</span>
                       )}
-                      {match.goalkeeperFree && (
-                        <span className="text-xs bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-full font-medium">GK Ücretsiz</span>
+                      {isPlayed && !isCancelled && (
+                        <span className="text-xs bg-blue-100 text-blue-600 px-2 py-0.5 rounded-full font-medium">Oynandı</span>
                       )}
                     </div>
                     <div className="flex items-center gap-3 mt-1.5">
@@ -205,23 +217,37 @@ export default function MatchesPage() {
                   </div>
                 </div>
 
-                <div className="flex items-center gap-4 shrink-0">
-                  {!match.cancelledAt && (
-                    <div className="text-right hidden sm:block">
+                <div className="flex items-center gap-2 shrink-0">
+                  {!isCancelled && !isPlayed && (
+                    <div className="text-right hidden sm:block mr-2">
                       <p className="text-xs text-slate-400">Kişi başı</p>
                       <p className="font-bold text-slate-800">₺{perPlayerCost}</p>
                     </div>
                   )}
-                  <button
-                    onClick={() => handleCancel(match)}
-                    className={`text-xs border px-3 py-1.5 rounded-xl font-medium transition-colors ${
-                      match.cancelledAt
-                        ? "border-emerald-200 text-emerald-600 hover:bg-emerald-50"
-                        : "border-red-200 text-red-400 hover:bg-red-50"
-                    }`}
-                  >
-                    {match.cancelledAt ? "Geri Al" : "İptal Et"}
-                  </button>
+                  {!isCancelled && (
+                    <button
+                      onClick={() => handlePlayed(match)}
+                      className={`text-xs border px-3 py-1.5 rounded-xl font-medium transition-colors ${
+                        isPlayed
+                          ? "border-slate-200 text-slate-400 hover:bg-slate-50"
+                          : "border-blue-200 text-blue-600 hover:bg-blue-50"
+                      }`}
+                    >
+                      {isPlayed ? "Geri Al" : "Oynadık"}
+                    </button>
+                  )}
+                  {!isPlayed && (
+                    <button
+                      onClick={() => handleCancel(match)}
+                      className={`text-xs border px-3 py-1.5 rounded-xl font-medium transition-colors ${
+                        isCancelled
+                          ? "border-emerald-200 text-emerald-600 hover:bg-emerald-50"
+                          : "border-red-200 text-red-400 hover:bg-red-50"
+                      }`}
+                    >
+                      {isCancelled ? "Geri Al" : "İptal Et"}
+                    </button>
+                  )}
                 </div>
               </div>
             );

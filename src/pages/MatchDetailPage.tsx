@@ -4,7 +4,7 @@ import { Link } from "react-router-dom";
 import Modal from "@/components/Modal";
 import { format } from "date-fns";
 import {
-  ArrowLeft, CircleDollarSign, Users, UserPlus2, X, Pencil, Check,
+  ArrowLeft, CircleDollarSign, Users, X, Pencil, Check,
   Star, Wand2, Trash2, ChevronDown, ChevronUp, Copy, Check as CheckIcon, Trophy,
 } from "lucide-react";
 import { useToast } from "@/hooks/useToast";
@@ -13,7 +13,7 @@ import Avatar from "@/components/Avatar";
 import type { MatchDetail, MatchRatingData } from "@/types/matches";
 import type { Player } from "@/types/players";
 import {
-  getMatch, updateTeams, addParticipants, removeParticipant,
+  getMatch, updateTeams, updateParticipants, removeParticipant,
   getMatchRatings, submitRatings, deleteRater, suggestTeams, toggleHasPaid, payFromKasa,
   updateScore, updatePlayerStats,
 } from "@/services/matches";
@@ -325,13 +325,13 @@ export default function MatchDetailPage() {
     setGoalkeeperIds((prev) => prev.includes(pid) ? prev.filter((g) => g !== pid) : [...prev, pid]);
   };
 
-  const handleAddPlayers = async () => {
-    if (selectedIds.length === 0) return;
+  const handleUpdatePlayers = async () => {
     setSaving(true);
-    const { error } = await addParticipants(id, selectedIds, goalkeeperIds.length > 0 ? goalkeeperIds : undefined);
+    const { error } = await updateParticipants(id, selectedIds, goalkeeperIds.length > 0 ? goalkeeperIds : undefined);
     setSaving(false);
     if (error) { showError(error); return; }
     setShowAddPlayers(false);
+    setSelectedIds([]);
     setGoalkeeperIds([]);
     loadMatch();
   };
@@ -1001,15 +1001,18 @@ export default function MatchDetailPage() {
               {copied ? <CheckIcon size={14} className="text-emerald-600" /> : <Copy size={14} />}
               {copied ? "Kopyalandı" : "Kopyala"}
             </button>
-            {availablePlayers.length > 0 && (
-              <button
-                onClick={() => { setSelectedIds([]); setGoalkeeperIds([]); setShowAddPlayers(true); }}
-                className="flex items-center gap-1.5 text-sm text-emerald-600 hover:text-emerald-700 font-medium"
-              >
-                <UserPlus2 size={15} />
-                Oyuncu Ekle
-              </button>
-            )}
+            <button
+              onClick={() => {
+                if (!match) return;
+                setSelectedIds(match.matchPlayers.map((mp) => mp.playerId));
+                setGoalkeeperIds(match.matchPlayers.filter((mp) => mp.isGoalkeeper).map((mp) => mp.playerId));
+                setShowAddPlayers(true);
+              }}
+              className="flex items-center gap-1.5 text-sm text-emerald-600 hover:text-emerald-700 font-medium"
+            >
+              <Users size={15} />
+              Oyuncuları Düzenle
+            </button>
           </div>
         </div>
 
@@ -1283,54 +1286,73 @@ export default function MatchDetailPage() {
         </Modal>
       )}
 
-      {/* ── Add Players Modal ── */}
+      {/* ── Edit Players Modal ── */}
       {showAddPlayers && (
-        <Modal title="Oyuncu Ekle" onClose={() => { setShowAddPlayers(false); setSelectedIds([]); setGoalkeeperIds([]); }}>
+        <Modal title="Oyuncuları Düzenle" onClose={() => { setShowAddPlayers(false); setSelectedIds([]); setGoalkeeperIds([]); }}>
           <div className="space-y-4">
+            <div className="flex justify-between items-center">
+              <span className="text-xs text-slate-500">{selectedIds.length} oyuncu seçili</span>
+              {selectedIds.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => { setSelectedIds([]); setGoalkeeperIds([]); }}
+                  className="text-xs text-red-500 hover:text-red-700 font-medium"
+                >
+                  Tümünü temizle
+                </button>
+              )}
+            </div>
             <div className="border border-slate-200 rounded-xl max-h-64 overflow-y-auto divide-y divide-slate-100">
-              {availablePlayers.map((player) => {
-                const isSelected = selectedIds.includes(player.id);
-                const isGk = goalkeeperIds.includes(player.id);
-                return (
-                  <div key={player.id} className="flex items-center gap-2 px-3 py-2.5 hover:bg-slate-50">
-                    <label className="flex items-center gap-2 flex-1 cursor-pointer min-w-0">
+              {allPlayers.map((player) => (
+                <label key={player.id} className="flex items-center gap-2 px-3 py-2.5 hover:bg-slate-50 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={selectedIds.includes(player.id)}
+                    onChange={() => togglePlayer(player.id)}
+                    className="accent-emerald-600 shrink-0"
+                  />
+                  <span className="text-sm text-slate-700 truncate">{player.name}</span>
+                </label>
+              ))}
+            </div>
+            {selectedIds.length > 0 && (
+              <div>
+                <label className="block text-xs text-slate-500 mb-1.5">Kaleci (opsiyonel)</label>
+                <div className="border border-slate-200 rounded-xl divide-y divide-slate-100">
+                  {allPlayers.filter((p) => selectedIds.includes(p.id)).map((p) => (
+                    <label key={p.id} className="flex items-center gap-2 px-3 py-2 cursor-pointer hover:bg-slate-50">
                       <input
                         type="checkbox"
-                        checked={isSelected}
-                        onChange={() => togglePlayer(player.id)}
-                        className="accent-emerald-600 shrink-0"
+                        checked={goalkeeperIds.includes(p.id)}
+                        onChange={() => toggleGk(p.id)}
+                        className="accent-yellow-500"
                       />
-                      <span className="text-sm text-slate-700 truncate">{player.name}</span>
+                      <span className="text-sm text-slate-700">{p.name}</span>
                     </label>
-                    {isSelected && (
-                      <button
-                        type="button"
-                        onClick={() => toggleGk(player.id)}
-                        className={`shrink-0 text-[11px] font-bold px-2 py-0.5 rounded-md border transition-colors ${
-                          isGk
-                            ? "bg-yellow-100 text-yellow-700 border-yellow-300"
-                            : "bg-slate-100 text-slate-400 border-slate-200 hover:border-yellow-300 hover:text-yellow-600"
-                        }`}
-                      >
-                        K
-                      </button>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-            {selectedIds.length > 0 && match.totalCost > 0 && (
-              <p className="text-xs text-emerald-700 font-medium">
-                Yeni kişi başı: ₺{(match.totalCost / (match.matchPlayers.length + selectedIds.length)).toFixed(0)}
-                {" "}({match.matchPlayers.length + selectedIds.length} oyuncu)
-              </p>
+                  ))}
+                </div>
+              </div>
             )}
+            {selectedIds.length > 0 && match.totalCost > 0 && (() => {
+              const payingCount = selectedIds.filter((pid) => !goalkeeperIds.includes(pid)).length;
+              const perPlayer = match.goalkeeperFree && payingCount > 0
+                ? match.totalCost / payingCount
+                : selectedIds.length > 0
+                ? match.totalCost / selectedIds.length
+                : 0;
+              return (
+                <p className="text-xs text-emerald-700 font-medium">
+                  Kişi başı: ₺{perPlayer.toFixed(0)}
+                  {" "}({selectedIds.length} oyuncu{match.goalkeeperFree && goalkeeperIds.length > 0 ? `, ${goalkeeperIds.length} GK ücretsiz` : ""})
+                </p>
+              );
+            })()}
             <div className="flex gap-3 pt-1">
               <button onClick={() => { setShowAddPlayers(false); setSelectedIds([]); setGoalkeeperIds([]); }} className="flex-1 border border-slate-200 text-slate-600 py-2.5 rounded-xl hover:bg-slate-50 text-sm font-medium">
                 İptal
               </button>
-              <button onClick={handleAddPlayers} disabled={saving || selectedIds.length === 0} className="flex-1 bg-emerald-600 text-white py-2.5 rounded-xl hover:bg-emerald-700 disabled:opacity-50 text-sm font-medium">
-                {saving ? "Ekleniyor..." : "Ekle"}
+              <button onClick={handleUpdatePlayers} disabled={saving} className="flex-1 bg-emerald-600 text-white py-2.5 rounded-xl hover:bg-emerald-700 disabled:opacity-50 text-sm font-medium">
+                {saving ? "Kaydediliyor..." : "Güncelle"}
               </button>
             </div>
           </div>

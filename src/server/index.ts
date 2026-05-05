@@ -20,6 +20,7 @@ import { calculatePlayerBalance } from "@/lib/playerBalance";
 import { checkRateLimit, resetRateLimit } from "@/lib/rate-limit";
 import {
   AddParticipantsSchema,
+  UpdateParticipantsSchema,
   CreateMatchSchema,
   CreatePaymentSchema,
   CreatePlayerSchema,
@@ -612,9 +613,31 @@ app.patch(
       return;
     }
 
+    if (match.playedAt) {
+      res.status(400).json({ error: "Oynanan maç iptal edilemez." });
+      return;
+    }
+
     const updated = await prisma.match.update({
       where: { id: req.params.id },
       data: { cancelledAt: match.cancelledAt ? null : new Date() },
+    });
+    res.json(updated);
+  })
+);
+
+app.patch(
+  "/api/matches/:id/played",
+  asyncRoute(async (req, res) => {
+    const match = await prisma.match.findFirst({ where: { id: req.params.id, deletedAt: null } });
+    if (!match) {
+      res.status(404).json({ error: "Not found" });
+      return;
+    }
+
+    const updated = await prisma.match.update({
+      where: { id: req.params.id },
+      data: { playedAt: match.playedAt ? null : new Date() },
     });
     res.json(updated);
   })
@@ -789,6 +812,74 @@ app.post(
             playerId,
             amountOwed: match.goalkeeperFree && newGkIds.has(playerId) ? 0 : amountPerPlayer,
             isGoalkeeper: newGkIds.has(playerId),
+          },
+        })
+      ),
+    ]);
+
+    const updated = await prisma.match.findUnique({
+      where: { id: matchId },
+      include: { matchPlayers: { include: { player: true } } },
+    });
+    res.json(updated);
+  })
+);
+
+app.put(
+  "/api/matches/:id/participants",
+  asyncRoute(async (req, res) => {
+    const parsed = parseBody(UpdateParticipantsSchema, req.body);
+    if (!parsed.ok) {
+      res.status(400).json({ error: parsed.error });
+      return;
+    }
+
+    const matchId = req.params.id;
+    const { playerIds, goalkeeperPlayerIds } = parsed.data;
+    const gkSet = new Set(goalkeeperPlayerIds ?? []);
+
+    const match = await prisma.match.findUnique({
+      where: { id: matchId },
+      include: { matchPlayers: true },
+    });
+
+    if (!match) {
+      res.status(404).json({ error: "Match not found" });
+      return;
+    }
+
+    const newPlayerIdSet = new Set(playerIds);
+    const toRemove = match.matchPlayers.filter((mp) => !newPlayerIdSet.has(mp.playerId));
+    const existingPlayerIds = new Set(match.matchPlayers.map((mp) => mp.playerId));
+    const toAdd = playerIds.filter((pid) => !existingPlayerIds.has(pid));
+    const toUpdate = match.matchPlayers.filter((mp) => newPlayerIdSet.has(mp.playerId));
+
+    const payingCount = playerIds.filter((pid) => !gkSet.has(pid)).length;
+    const amountPerPlayer =
+      match.goalkeeperFree && payingCount > 0
+        ? roundCents(match.totalCost / payingCount)
+        : playerIds.length > 0
+        ? roundCents(match.totalCost / playerIds.length)
+        : 0;
+
+    await prisma.$transaction([
+      ...toRemove.map((mp) => prisma.matchPlayer.delete({ where: { id: mp.id } })),
+      ...toUpdate.map((mp) =>
+        prisma.matchPlayer.update({
+          where: { id: mp.id },
+          data: {
+            isGoalkeeper: gkSet.has(mp.playerId),
+            amountOwed: match.goalkeeperFree && gkSet.has(mp.playerId) ? 0 : amountPerPlayer,
+          },
+        })
+      ),
+      ...toAdd.map((playerId) =>
+        prisma.matchPlayer.create({
+          data: {
+            matchId,
+            playerId,
+            amountOwed: match.goalkeeperFree && gkSet.has(playerId) ? 0 : amountPerPlayer,
+            isGoalkeeper: gkSet.has(playerId),
           },
         })
       ),

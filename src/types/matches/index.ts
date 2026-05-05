@@ -24,6 +24,7 @@ export interface MatchListItem {
   totalCost: number;
   notes: string | null;
   cancelledAt: string | null;
+  playedAt: string | null;
   goalkeeperFree: boolean;
   team1Score: number | null;
   team2Score: number | null;
@@ -40,6 +41,7 @@ export interface MatchDetail {
   team2Name: string | null;
   team1Score: number | null;
   team2Score: number | null;
+  goalkeeperFree: boolean;
   matchPlayers: MatchPlayer[];
 }
 

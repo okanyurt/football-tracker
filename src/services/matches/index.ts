@@ -25,6 +25,11 @@ export async function toggleCancelMatch(id: string): Promise<Result<MatchListIte
   return handle(res, "Maç güncellenemedi");
 }
 
+export async function togglePlayedMatch(id: string): Promise<Result<MatchListItem>> {
+  const res = await fetch(`/api/matches/${id}/played`, { method: "PATCH" });
+  return handle(res, "Maç güncellenemedi");
+}
+
 export async function updateTeams(id: string, payload: UpdateTeamsDto): Promise<Result<MatchDetail>> {
   const res = await fetch(`/api/matches/${id}/teams`, {
     method: "PATCH",
@@ -41,6 +46,15 @@ export async function addParticipants(matchId: string, playerIds: string[], goal
     body: JSON.stringify({ playerIds, goalkeeperPlayerIds }),
   });
   return handle(res, "Oyuncu eklenemedi");
+}
+
+export async function updateParticipants(matchId: string, playerIds: string[], goalkeeperPlayerIds?: string[]): Promise<Result<MatchDetail>> {
+  const res = await fetch(`/api/matches/${matchId}/participants`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ playerIds, goalkeeperPlayerIds }),
+  });
+  return handle(res, "Oyuncular güncellenemedi");
 }
 
 export async function removeParticipant(matchId: string, playerId: string): Promise<Result<MatchDetail>> {

@@ -58,6 +58,11 @@ export const AddParticipantsSchema = z.object({
   goalkeeperPlayerIds: z.array(z.string().cuid()).max(10).optional(),
 });
 
+export const UpdateParticipantsSchema = z.object({
+  playerIds: z.array(z.string().cuid()).max(50, "Maximum 50 players"),
+  goalkeeperPlayerIds: z.array(z.string().cuid()).max(10).optional(),
+});
+
 export const RemoveParticipantSchema = z.object({
   playerId: z.string().cuid("Invalid player id"),
 });

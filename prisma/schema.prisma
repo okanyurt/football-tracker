@@ -30,6 +30,7 @@ model Match {
   totalCost     Float
   notes         String?
   cancelledAt   DateTime?
+  playedAt      DateTime?
   goalkeeperFree Boolean       @default(false)
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
