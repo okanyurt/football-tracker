@@ -20,6 +20,7 @@ export default function PlayersPage() {
   const [missedSort, setMissedSort] = useState<"none" | "desc" | "asc">("none");
   const [balanceSort, setBalanceSort] = useState<"none" | "desc" | "asc">("none");
   const [nameSort, setNameSort] = useState<"none" | "asc" | "desc">("none");
+  const [ratingSort, setRatingSort] = useState<"none" | "desc" | "asc">("none");
   const { showError, ToastEl } = useToast();
 
   const load = useCallback(async () => {
@@ -140,7 +141,7 @@ export default function PlayersPage() {
           <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
             <h2 className="text-sm font-semibold text-slate-700">Tüm Oyuncular</h2>
             <button
-              onClick={() => { setMissedSort((v) => v === "none" ? "desc" : v === "desc" ? "asc" : "none"); setBalanceSort("none"); setNameSort("none"); }}
+              onClick={() => { setMissedSort((v) => v === "none" ? "desc" : v === "desc" ? "asc" : "none"); setBalanceSort("none"); setNameSort("none"); setRatingSort("none"); }}
               className={`flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-lg border transition-colors ${
                 missedSort !== "none"
                   ? "bg-red-50 border-red-200 text-red-600"
@@ -156,7 +157,7 @@ export default function PlayersPage() {
               <tr>
                 <th className="text-left px-5 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">
                   <button
-                    onClick={() => { setNameSort((v) => v === "none" ? "asc" : v === "asc" ? "desc" : "none"); setMissedSort("none"); setBalanceSort("none"); }}
+                    onClick={() => { setNameSort((v) => v === "none" ? "asc" : v === "asc" ? "desc" : "none"); setMissedSort("none"); setBalanceSort("none"); setRatingSort("none"); }}
                     className={`inline-flex items-center gap-1 transition-colors ${nameSort !== "none" ? "text-slate-700" : "text-slate-400 hover:text-slate-600"}`}
                   >
                     <ArrowDownUp size={11} />
@@ -164,11 +165,19 @@ export default function PlayersPage() {
                   </button>
                 </th>
                 <th className="text-left px-5 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider hidden sm:table-cell">Mevki</th>
-                <th className="text-center px-3 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider hidden sm:table-cell">Ort.</th>
+                <th className="text-center px-3 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider hidden sm:table-cell">
+                  <button
+                    onClick={() => { setRatingSort((v) => v === "none" ? "desc" : v === "desc" ? "asc" : "none"); setMissedSort("none"); setBalanceSort("none"); setNameSort("none"); }}
+                    className={`inline-flex items-center gap-1 transition-colors ${ratingSort !== "none" ? "text-blue-600" : "text-slate-400 hover:text-slate-600"}`}
+                  >
+                    <ArrowDownUp size={11} />
+                    {ratingSort === "desc" ? "Yük → Düş" : ratingSort === "asc" ? "Düş → Yük" : "Ort."}
+                  </button>
+                </th>
                 <th className="text-left px-5 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider hidden sm:table-cell">Telefon</th>
                 <th className="text-right px-5 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">
                   <button
-                    onClick={() => { setBalanceSort((v) => v === "none" ? "desc" : v === "desc" ? "asc" : "none"); setMissedSort("none"); }}
+                    onClick={() => { setBalanceSort((v) => v === "none" ? "desc" : v === "desc" ? "asc" : "none"); setMissedSort("none"); setNameSort("none"); setRatingSort("none"); }}
                     className={`inline-flex items-center gap-1 ml-auto transition-colors ${balanceSort !== "none" ? "text-emerald-600" : "text-slate-400 hover:text-slate-600"}`}
                   >
                     <ArrowDownUp size={11} />
@@ -192,6 +201,13 @@ export default function PlayersPage() {
                   return [...players].sort((a, b) =>
                     balanceSort === "desc" ? b.balance - a.balance : a.balance - b.balance
                   );
+                }
+                if (ratingSort !== "none") {
+                  return [...players].sort((a, b) => {
+                    const ra = a.avgRating ?? -1;
+                    const rb = b.avgRating ?? -1;
+                    return ratingSort === "desc" ? rb - ra : ra - rb;
+                  });
                 }
                 if (nameSort !== "none") {
                   return [...players].sort((a, b) =>
