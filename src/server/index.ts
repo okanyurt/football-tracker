@@ -32,6 +32,7 @@ import {
   UpdateTeamsSchema,
   UpdateScoreSchema,
   UpdatePlayerStatsSchema,
+  SetTopRunnerSchema,
   parseBody,
 } from "@/lib/schemas";
 
@@ -750,7 +751,26 @@ app.patch(
       data: {
         ...(parsed.data.goals !== undefined && { goals: parsed.data.goals }),
         ...(parsed.data.assists !== undefined && { assists: parsed.data.assists }),
+        ...(parsed.data.keyPlays !== undefined && { keyPlays: parsed.data.keyPlays }),
+        ...(parsed.data.shots !== undefined && { shots: parsed.data.shots }),
       },
+    });
+    res.json(updated);
+  })
+);
+
+app.patch(
+  "/api/matches/:id/top-runner",
+  asyncRoute(async (req, res) => {
+    const parsed = parseBody(SetTopRunnerSchema, req.body);
+    if (!parsed.ok) { res.status(400).json({ error: parsed.error }); return; }
+
+    const match = await prisma.match.findFirst({ where: { id: req.params.id, deletedAt: null } });
+    if (!match) { res.status(404).json({ error: "Not found" }); return; }
+
+    const updated = await prisma.match.update({
+      where: { id: req.params.id },
+      data: { topRunnerId: parsed.data.playerId },
     });
     res.json(updated);
   })

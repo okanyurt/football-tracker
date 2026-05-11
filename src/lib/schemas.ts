@@ -94,6 +94,12 @@ export const UpdateScoreSchema = z.object({
 export const UpdatePlayerStatsSchema = z.object({
   goals: z.number().int().nonnegative().optional(),
   assists: z.number().int().nonnegative().optional(),
+  keyPlays: z.number().int().nonnegative().optional(),
+  shots: z.number().int().nonnegative().optional(),
+});
+
+export const SetTopRunnerSchema = z.object({
+  playerId: z.string().cuid().nullable(),
 });
 
 // ── Payments ──────────────────────────────────────────────────────────────────

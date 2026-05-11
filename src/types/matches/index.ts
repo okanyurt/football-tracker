@@ -13,6 +13,8 @@ export interface MatchPlayer {
   team: number | null;
   goals: number;
   assists: number;
+  keyPlays: number;
+  shots: number;
   player: BasicPlayer;
   playerBalance: number;
 }
@@ -41,6 +43,7 @@ export interface MatchDetail {
   team2Name: string | null;
   team1Score: number | null;
   team2Score: number | null;
+  topRunnerId: string | null;
   goalkeeperFree: boolean;
   matchPlayers: MatchPlayer[];
 }

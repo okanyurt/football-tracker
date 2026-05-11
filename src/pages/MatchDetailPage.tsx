@@ -15,9 +15,23 @@ import type { Player } from "@/types/players";
 import {
   getMatch, updateTeams, updateParticipants, removeParticipant,
   getMatchRatings, submitRatings, deleteRater, suggestTeams, toggleHasPaid, payFromKasa,
-  updateScore, updatePlayerStats,
+  updateScore, updatePlayerStats, setTopRunner,
 } from "@/services/matches";
 import { getPlayers } from "@/services/players";
+
+function StatControl({ label, value, activeColor, onDec, onInc }: {
+  label: string; value: number; activeColor: string;
+  onDec: () => void; onInc: () => void;
+}) {
+  return (
+    <div className="inline-flex items-center gap-0.5">
+      <span className="text-[10px] font-bold text-slate-400 w-3">{label}</span>
+      <button onClick={onDec} disabled={value === 0} className="w-4 h-4 rounded flex items-center justify-center text-slate-400 hover:text-slate-600 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed text-xs font-bold leading-none">−</button>
+      <span className={`w-4 text-center text-xs font-bold ${value > 0 ? activeColor : "text-slate-300"}`}>{value}</span>
+      <button onClick={onInc} className="w-4 h-4 rounded flex items-center justify-center text-slate-400 hover:bg-slate-100 text-xs font-bold leading-none">+</button>
+    </div>
+  );
+}
 
 export default function MatchDetailPage() {
   const { id = "" } = useParams<{ id: string }>();
@@ -93,13 +107,53 @@ export default function MatchDetailPage() {
 
     const awards: Award[] = [];
 
+    const t1Won = match.team1Score != null && match.team2Score != null && match.team1Score > match.team2Score;
+    const t2Won = match.team1Score != null && match.team2Score != null && match.team2Score > match.team1Score;
+    const isWinner = (mp: typeof match.matchPlayers[0]) =>
+      (mp.team === 1 && t1Won) || (mp.team === 2 && t2Won);
+
+    const topByStat = (
+      getStat: (mp: typeof match.matchPlayers[0]) => number
+    ) => {
+      const filtered = match.matchPlayers.filter((mp) => getStat(mp) > 0);
+      if (filtered.length === 0) return null;
+      const max = Math.max(...filtered.map(getStat));
+      const tied = filtered.filter((mp) => getStat(mp) === max);
+      if (tied.length === 1) return tied[0];
+      const fromWinner = tied.filter(isWinner);
+      return fromWinner.length > 0 ? fromWinner[0] : tied[0];
+    };
+
     // 🔥 En Skorer
-    const topScorer = [...match.matchPlayers].filter((mp) => mp.goals > 0).sort((a, b) => b.goals - a.goals)[0] ?? null;
+    const topScorer = topByStat((mp) => mp.goals);
     if (topScorer) awards.push({ key: "scorer", emoji: "🔥", title: "En Skorer", playerName: topScorer.player.name, stat: `${topScorer.goals} gol`, bg: "bg-orange-50 border-orange-200", statColor: "text-orange-600" });
 
     // 🎯 En Çok Asist
-    const topAssister = [...match.matchPlayers].filter((mp) => mp.assists > 0).sort((a, b) => b.assists - a.assists)[0] ?? null;
+    const topAssister = topByStat((mp) => mp.assists);
     if (topAssister) awards.push({ key: "assist", emoji: "🎯", title: "En Çok Asist", playerName: topAssister.player.name, stat: `${topAssister.assists} asist`, bg: "bg-blue-50 border-blue-200", statColor: "text-blue-600" });
+
+    // ⚽ En Çok Gol Katkısı (gol + asist)
+    const topContrib = topByStat((mp) => mp.goals + mp.assists);
+    if (topContrib && (topContrib !== topScorer || topContrib !== topAssister)) {
+      awards.push({ key: "contrib", emoji: "⚽", title: "Gol Katkısı", playerName: topContrib.player.name, stat: `${topContrib.goals + topContrib.assists} katkı`, bg: "bg-green-50 border-green-200", statColor: "text-green-600" });
+    }
+
+    // 👟 En Çok Şut
+    const topShooter = topByStat((mp) => mp.shots);
+    if (topShooter) awards.push({ key: "shots", emoji: "👟", title: "En Çok Şut", playerName: topShooter.player.name, stat: `${topShooter.shots} şut`, bg: "bg-yellow-50 border-yellow-200", statColor: "text-yellow-600" });
+
+    // 🛡️ Defansif Kilit
+    const topKeyPlays = topByStat((mp) => mp.keyPlays);
+    if (topKeyPlays) {
+      const label = topKeyPlays.isGoalkeeper ? "kurtarış" : "müdahale";
+      awards.push({ key: "keyplays", emoji: "🛡️", title: "Defansif Kilit", playerName: topKeyPlays.player.name, stat: `${topKeyPlays.keyPlays} ${label}`, bg: "bg-cyan-50 border-cyan-200", statColor: "text-cyan-600" });
+    }
+
+    // 🏃 En Çok Koşan
+    if (match.topRunnerId) {
+      const runner = match.matchPlayers.find((mp) => mp.playerId === match.topRunnerId);
+      if (runner) awards.push({ key: "runner", emoji: "🏃", title: "En Çok Koşan", playerName: runner.player.name, stat: "Seçildi", bg: "bg-lime-50 border-lime-200", statColor: "text-lime-600" });
+    }
 
     const fmt = (n: number) => (n % 1 === 0 ? String(n) : n.toFixed(1));
 
@@ -124,8 +178,6 @@ export default function MatchDetailPage() {
       const momMaxAssists = momHasAssists ? Math.max(0, ...fieldMPs.map((mp) => mp.assists)) : 0;
       const momRW = momHasAssists ? 0.5 : 0.65;
       const momAW = momHasAssists ? 0.15 : 0;
-      const t1Won = match.team1Score != null && match.team2Score != null && match.team1Score > match.team2Score;
-      const t2Won = match.team1Score != null && match.team2Score != null && match.team2Score > match.team1Score;
       const momRanked = match.matchPlayers
         .map((mp) => {
           const rd = matchRatings.players.find((p) => p.playerId === mp.playerId);
@@ -229,7 +281,7 @@ export default function MatchDetailPage() {
         p.playerId === playerId ? { ...p, goals: newGoals } : p
       ),
     } : prev);
-    const { error } = await updatePlayerStats(id, playerId, newGoals, mp.assists);
+    const { error } = await updatePlayerStats(id, playerId, newGoals, mp.assists, mp.keyPlays, mp.shots);
     if (error) { showError(error); loadMatch(); }
   };
 
@@ -244,7 +296,45 @@ export default function MatchDetailPage() {
         p.playerId === playerId ? { ...p, assists: newAssists } : p
       ),
     } : prev);
-    const { error } = await updatePlayerStats(id, playerId, mp.goals, newAssists);
+    const { error } = await updatePlayerStats(id, playerId, mp.goals, newAssists, mp.keyPlays, mp.shots);
+    if (error) { showError(error); loadMatch(); }
+  };
+
+  const handleKeyPlaysChange = async (playerId: string, delta: number) => {
+    if (!match) return;
+    const mp = match.matchPlayers.find((p) => p.playerId === playerId);
+    if (!mp) return;
+    const newKeyPlays = Math.max(0, mp.keyPlays + delta);
+    setMatch((prev) => prev ? {
+      ...prev,
+      matchPlayers: prev.matchPlayers.map((p) =>
+        p.playerId === playerId ? { ...p, keyPlays: newKeyPlays } : p
+      ),
+    } : prev);
+    const { error } = await updatePlayerStats(id, playerId, mp.goals, mp.assists, newKeyPlays, mp.shots);
+    if (error) { showError(error); loadMatch(); }
+  };
+
+  const handleShotChange = async (playerId: string, delta: number) => {
+    if (!match) return;
+    const mp = match.matchPlayers.find((p) => p.playerId === playerId);
+    if (!mp) return;
+    const newShots = Math.max(0, mp.shots + delta);
+    setMatch((prev) => prev ? {
+      ...prev,
+      matchPlayers: prev.matchPlayers.map((p) =>
+        p.playerId === playerId ? { ...p, shots: newShots } : p
+      ),
+    } : prev);
+    const { error } = await updatePlayerStats(id, playerId, mp.goals, mp.assists, mp.keyPlays, newShots);
+    if (error) { showError(error); loadMatch(); }
+  };
+
+  const handleTopRunnerChange = async (playerId: string) => {
+    if (!match) return;
+    const newId = match.topRunnerId === playerId ? null : playerId;
+    setMatch((prev) => prev ? { ...prev, topRunnerId: newId } : prev);
+    const { error } = await setTopRunner(id, newId);
     if (error) { showError(error); loadMatch(); }
   };
 
@@ -812,19 +902,27 @@ export default function MatchDetailPage() {
                         const avg = matchRatings?.players.find((p) => p.playerId === mp.playerId);
                         const isTop = mp.playerId === topPlayerId;
                         return (
-                          <div key={mp.id} className={`flex items-center gap-2 px-2 py-1.5 rounded-lg border ${isTop ? "bg-emerald-50 border-emerald-200" : "bg-white border-blue-100"}`}>
-                            <Avatar name={mp.player.name} size="sm" />
-                            <span className="text-sm font-medium text-slate-700 flex-1 min-w-0 truncate">{mp.player.name}</span>
-                            {mp.isGoalkeeper && <span className="text-[10px] font-bold bg-yellow-100 text-yellow-700 border border-yellow-200 px-1.5 py-0.5 rounded-md shrink-0">GK</span>}
-                            {avg && avg.count > 0 && (
-                              <span className={`text-[11px] font-bold border px-1.5 py-0.5 rounded-md shrink-0 ${isTop ? "bg-emerald-500 text-white border-emerald-600" : "bg-violet-100 text-violet-700 border-violet-200"}`}>
-                                {avg.average % 1 === 0 ? avg.average : avg.average.toFixed(1)}
-                              </span>
-                            )}
-                            <div className="inline-flex items-center gap-0.5 shrink-0">
-                              <button onClick={() => handleGoalChange(mp.playerId, -1)} disabled={mp.goals === 0} className="w-5 h-5 rounded flex items-center justify-center text-slate-400 hover:text-slate-600 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed text-xs font-bold">−</button>
-                              <span className={`w-5 text-center text-sm font-bold ${mp.goals > 0 ? "text-emerald-600" : "text-slate-300"}`}>{mp.goals}</span>
-                              <button onClick={() => handleGoalChange(mp.playerId, 1)} className="w-5 h-5 rounded flex items-center justify-center text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 text-xs font-bold">+</button>
+                          <div key={mp.id} className={`flex flex-wrap items-center gap-x-2 gap-y-1 px-2 py-1.5 rounded-lg border ${isTop ? "bg-emerald-50 border-emerald-200" : "bg-white border-blue-100"}`}>
+                            <div className="flex items-center gap-2 flex-1 min-w-0">
+                              <Avatar name={mp.player.name} size="sm" />
+                              <span className="text-sm font-medium text-slate-700 truncate">{mp.player.name}</span>
+                              {mp.isGoalkeeper && <span className="text-[10px] font-bold bg-yellow-100 text-yellow-700 border border-yellow-200 px-1.5 py-0.5 rounded-md shrink-0">GK</span>}
+                              {avg && avg.count > 0 && (
+                                <span className={`text-[11px] font-bold border px-1.5 py-0.5 rounded-md shrink-0 ${isTop ? "bg-emerald-500 text-white border-emerald-600" : "bg-violet-100 text-violet-700 border-violet-200"}`}>
+                                  {avg.average % 1 === 0 ? avg.average : avg.average.toFixed(1)}
+                                </span>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              <StatControl label="G" value={mp.goals} activeColor="text-emerald-600" onDec={() => handleGoalChange(mp.playerId, -1)} onInc={() => handleGoalChange(mp.playerId, 1)} />
+                              <StatControl label="A" value={mp.assists} activeColor="text-blue-600" onDec={() => handleAssistChange(mp.playerId, -1)} onInc={() => handleAssistChange(mp.playerId, 1)} />
+                              <StatControl label="Ş" value={mp.shots} activeColor="text-yellow-600" onDec={() => handleShotChange(mp.playerId, -1)} onInc={() => handleShotChange(mp.playerId, 1)} />
+                              <StatControl label={mp.isGoalkeeper ? "K" : "D"} value={mp.keyPlays} activeColor="text-cyan-600" onDec={() => handleKeyPlaysChange(mp.playerId, -1)} onInc={() => handleKeyPlaysChange(mp.playerId, 1)} />
+                              <button
+                                onClick={() => handleTopRunnerChange(mp.playerId)}
+                                title="En çok koşan"
+                                className={`w-6 h-6 rounded flex items-center justify-center text-sm transition-colors ${match.topRunnerId === mp.playerId ? "bg-lime-100 text-lime-600" : "text-slate-300 hover:text-lime-500 hover:bg-lime-50"}`}
+                              >🏃</button>
                             </div>
                           </div>
                         );
@@ -860,19 +958,27 @@ export default function MatchDetailPage() {
                         const avg = matchRatings?.players.find((p) => p.playerId === mp.playerId);
                         const isTop = mp.playerId === topPlayerId;
                         return (
-                          <div key={mp.id} className={`flex items-center gap-2 px-2 py-1.5 rounded-lg border ${isTop ? "bg-emerald-50 border-emerald-200" : "bg-white border-orange-100"}`}>
-                            <Avatar name={mp.player.name} size="sm" />
-                            <span className="text-sm font-medium text-slate-700 flex-1 min-w-0 truncate">{mp.player.name}</span>
-                            {mp.isGoalkeeper && <span className="text-[10px] font-bold bg-yellow-100 text-yellow-700 border border-yellow-200 px-1.5 py-0.5 rounded-md shrink-0">GK</span>}
-                            {avg && avg.count > 0 && (
-                              <span className={`text-[11px] font-bold border px-1.5 py-0.5 rounded-md shrink-0 ${isTop ? "bg-emerald-500 text-white border-emerald-600" : "bg-violet-100 text-violet-700 border-violet-200"}`}>
-                                {avg.average % 1 === 0 ? avg.average : avg.average.toFixed(1)}
-                              </span>
-                            )}
-                            <div className="inline-flex items-center gap-0.5 shrink-0">
-                              <button onClick={() => handleGoalChange(mp.playerId, -1)} disabled={mp.goals === 0} className="w-5 h-5 rounded flex items-center justify-center text-slate-400 hover:text-slate-600 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed text-xs font-bold">−</button>
-                              <span className={`w-5 text-center text-sm font-bold ${mp.goals > 0 ? "text-emerald-600" : "text-slate-300"}`}>{mp.goals}</span>
-                              <button onClick={() => handleGoalChange(mp.playerId, 1)} className="w-5 h-5 rounded flex items-center justify-center text-slate-400 hover:text-orange-500 hover:bg-orange-50 text-xs font-bold">+</button>
+                          <div key={mp.id} className={`flex flex-wrap items-center gap-x-2 gap-y-1 px-2 py-1.5 rounded-lg border ${isTop ? "bg-emerald-50 border-emerald-200" : "bg-white border-orange-100"}`}>
+                            <div className="flex items-center gap-2 flex-1 min-w-0">
+                              <Avatar name={mp.player.name} size="sm" />
+                              <span className="text-sm font-medium text-slate-700 truncate">{mp.player.name}</span>
+                              {mp.isGoalkeeper && <span className="text-[10px] font-bold bg-yellow-100 text-yellow-700 border border-yellow-200 px-1.5 py-0.5 rounded-md shrink-0">GK</span>}
+                              {avg && avg.count > 0 && (
+                                <span className={`text-[11px] font-bold border px-1.5 py-0.5 rounded-md shrink-0 ${isTop ? "bg-emerald-500 text-white border-emerald-600" : "bg-violet-100 text-violet-700 border-violet-200"}`}>
+                                  {avg.average % 1 === 0 ? avg.average : avg.average.toFixed(1)}
+                                </span>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              <StatControl label="G" value={mp.goals} activeColor="text-emerald-600" onDec={() => handleGoalChange(mp.playerId, -1)} onInc={() => handleGoalChange(mp.playerId, 1)} />
+                              <StatControl label="A" value={mp.assists} activeColor="text-blue-600" onDec={() => handleAssistChange(mp.playerId, -1)} onInc={() => handleAssistChange(mp.playerId, 1)} />
+                              <StatControl label="Ş" value={mp.shots} activeColor="text-yellow-600" onDec={() => handleShotChange(mp.playerId, -1)} onInc={() => handleShotChange(mp.playerId, 1)} />
+                              <StatControl label={mp.isGoalkeeper ? "K" : "D"} value={mp.keyPlays} activeColor="text-cyan-600" onDec={() => handleKeyPlaysChange(mp.playerId, -1)} onInc={() => handleKeyPlaysChange(mp.playerId, 1)} />
+                              <button
+                                onClick={() => handleTopRunnerChange(mp.playerId)}
+                                title="En çok koşan"
+                                className={`w-6 h-6 rounded flex items-center justify-center text-sm transition-colors ${match.topRunnerId === mp.playerId ? "bg-lime-100 text-lime-600" : "text-slate-300 hover:text-lime-500 hover:bg-lime-50"}`}
+                              >🏃</button>
                             </div>
                           </div>
                         );

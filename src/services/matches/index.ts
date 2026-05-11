@@ -117,11 +117,20 @@ export async function updateScore(matchId: string, team1Score: number | null, te
   return handle(res, "Skor kaydedilemedi");
 }
 
-export async function updatePlayerStats(matchId: string, playerId: string, goals: number, assists: number): Promise<Result<void>> {
+export async function updatePlayerStats(matchId: string, playerId: string, goals: number, assists: number, keyPlays: number, shots: number): Promise<Result<void>> {
   const res = await fetch(`/api/matches/${matchId}/participants/${playerId}/stats`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ goals, assists }),
+    body: JSON.stringify({ goals, assists, keyPlays, shots }),
   });
   return handle(res, "Oyuncu istatistikleri kaydedilemedi");
+}
+
+export async function setTopRunner(matchId: string, playerId: string | null): Promise<Result<void>> {
+  const res = await fetch(`/api/matches/${matchId}/top-runner`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ playerId }),
+  });
+  return handle(res, "Koşan oyuncu kaydedilemedi");
 }
