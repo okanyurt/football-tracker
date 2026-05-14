@@ -4,7 +4,7 @@ import express, { type NextFunction, type Request, type Response } from "express
 import cookieParser from "cookie-parser";
 import bcrypt from "bcryptjs";
 import { jwtVerify } from "jose";
-import { prisma } from "@/lib/prisma";
+import { prisma } from "../lib/prisma.ts";
 import {
   ACCESS_MAX_AGE,
   ACCESS_TOKEN_COOKIE,
@@ -14,10 +14,10 @@ import {
   signRefreshToken,
   verifyAccessToken,
   verifyRefreshToken,
-} from "@/lib/auth";
-import { roundCents } from "@/lib/money";
-import { calculatePlayerBalance } from "@/lib/playerBalance";
-import { checkRateLimit, resetRateLimit } from "@/lib/rate-limit";
+} from "../lib/auth.ts";
+import { roundCents } from "../lib/money.ts";
+import { calculatePlayerBalance } from "../lib/playerBalance.ts";
+import { checkRateLimit, resetRateLimit } from "../lib/rate-limit.ts";
 import {
   AddParticipantsSchema,
   UpdateParticipantsSchema,
@@ -34,7 +34,7 @@ import {
   UpdatePlayerStatsSchema,
   SetTopRunnerSchema,
   parseBody,
-} from "@/lib/schemas";
+} from "../lib/schemas.ts";
 
 const app = express();
 app.set("trust proxy", 1);
@@ -285,7 +285,7 @@ app.get(
         orderBy: { name: "asc" },
       }),
       prisma.match.findMany({
-        where: { deletedAt: null, cancelledAt: null },
+        where: { deletedAt: null, cancelledAt: null, isPrivate: false },
         select: { id: true },
         orderBy: { date: "desc" },
       }),
@@ -375,7 +375,7 @@ app.get(
   "/api/players/at-risk",
   asyncRoute(async (_req, res) => {
     const recentMatches = await prisma.match.findMany({
-      where: { deletedAt: null, cancelledAt: null },
+      where: { deletedAt: null, cancelledAt: null, isPrivate: false },
       orderBy: { date: "desc" },
       take: 4,
       select: { id: true },
@@ -395,7 +395,7 @@ app.get(
         _count: {
           select: {
             matchPlayers: {
-              where: { match: { deletedAt: null, cancelledAt: null } },
+              where: { match: { deletedAt: null, cancelledAt: null, isPrivate: false } },
             },
           },
         },
@@ -526,6 +526,7 @@ app.post(
       notes,
       playerIds,
       goalkeeperFree,
+      isPrivate,
       goalkeeperPlayerIds,
       perPlayerAmount,
       team1Name,
@@ -551,6 +552,7 @@ app.post(
         totalCost,
         notes: notes?.trim() || null,
         goalkeeperFree: !!goalkeeperFree,
+        isPrivate: !!isPrivate,
         team1Name: team1Name?.trim() || null,
         team2Name: team2Name?.trim() || null,
         matchPlayers: {

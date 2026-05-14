@@ -41,6 +41,7 @@ export const CreateMatchSchema = z.object({
     .min(1, "At least one player required")
     .max(50, "Maximum 50 players"),
   goalkeeperFree: z.boolean().optional(),
+  isPrivate: z.boolean().optional(),
   goalkeeperPlayerIds: z.array(z.string().cuid()).max(10).optional(),
   perPlayerAmount: z.number().nonnegative().optional().nullable(),
   team1Name: z.string().max(50).trim().optional().nullable(),

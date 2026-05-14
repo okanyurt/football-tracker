@@ -24,6 +24,7 @@ export interface MatchPlayerEntry {
     location: string | null;
     totalCost: number;
     cancelledAt: string | null;
+    isPrivate: boolean;
   };
 }
 

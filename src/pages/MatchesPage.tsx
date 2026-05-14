@@ -23,6 +23,7 @@ export default function MatchesPage() {
   const [notes, setNotes] = useState("");
   const [selectedPlayerIds, setSelectedPlayerIds] = useState<string[]>([]);
   const [goalkeeperFree, setGoalkeeperFree] = useState(false);
+  const [isPrivate, setIsPrivate] = useState(false);
   const [goalkeeperPlayerIds, setGoalkeeperPlayerIds] = useState<string[]>([]);
   const [teamsEnabled, setTeamsEnabled] = useState(false);
   const [team1Name, setTeam1Name] = useState("Takım 1");
@@ -49,6 +50,7 @@ export default function MatchesPage() {
     setNotes("");
     setSelectedPlayerIds([]);
     setGoalkeeperFree(false);
+    setIsPrivate(false);
     setGoalkeeperPlayerIds([]);
     setTeamsEnabled(false);
     setTeam1Name("Takım 1");
@@ -90,7 +92,7 @@ export default function MatchesPage() {
     setSaving(true);
     const { error } = await createMatch({
       date, location, totalCost: computedTotal, notes, playerIds: selectedPlayerIds,
-      goalkeeperFree, goalkeeperPlayerIds: goalkeeperFree ? goalkeeperPlayerIds : [],
+      goalkeeperFree, isPrivate, goalkeeperPlayerIds: goalkeeperFree ? goalkeeperPlayerIds : [],
       ...(costMode === "perPlayer" && { perPlayerAmount: Number(totalCost) }),
       ...(teamsEnabled && { team1Name, team2Name, playerTeams }),
     });
@@ -185,6 +187,7 @@ export default function MatchesPage() {
                         className={`font-semibold text-base ${isCancelled ? "line-through text-slate-400" : "text-slate-800 hover:text-emerald-600"}`}
                       >
                         {match.location || "Futbol"}
+                        {match.isPrivate && <span className="text-slate-400"> (özel maç)</span>}
                       </Link>
                       {match.team1Score != null && match.team2Score != null && (
                         <span className="text-sm font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-lg tabular-nums">
@@ -342,6 +345,18 @@ export default function MatchesPage() {
                   {" "}({payingCount} ödeyici{goalkeeperFree && goalkeeperPlayerIds.length > 0 ? `, ${goalkeeperPlayerIds.length} GK ücretsiz` : ""})
                 </p>
               )}
+            </div>
+
+            <div className="border border-slate-200 rounded-xl p-3 space-y-2">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={isPrivate}
+                  onChange={(e) => setIsPrivate(e.target.checked)}
+                  className="accent-emerald-600"
+                />
+                <span className="text-sm font-medium text-slate-700">Özel maç</span>
+              </label>
             </div>
 
             <div className="border border-slate-200 rounded-xl p-3 space-y-2">

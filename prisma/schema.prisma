@@ -32,6 +32,7 @@ model Match {
   cancelledAt   DateTime?
   playedAt      DateTime?
   goalkeeperFree Boolean       @default(false)
+  isPrivate     Boolean        @default(false)
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
   team1Name     String?

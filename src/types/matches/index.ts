@@ -28,6 +28,7 @@ export interface MatchListItem {
   cancelledAt: string | null;
   playedAt: string | null;
   goalkeeperFree: boolean;
+  isPrivate: boolean;
   team1Score: number | null;
   team2Score: number | null;
   matchPlayers: { isGoalkeeper: boolean; player: BasicPlayer }[];
@@ -45,6 +46,7 @@ export interface MatchDetail {
   team2Score: number | null;
   topRunnerId: string | null;
   goalkeeperFree: boolean;
+  isPrivate: boolean;
   matchPlayers: MatchPlayer[];
 }
 
@@ -55,6 +57,7 @@ export interface CreateMatchDto {
   notes?: string;
   playerIds: string[];
   goalkeeperFree?: boolean;
+  isPrivate?: boolean;
   goalkeeperPlayerIds?: string[];
   perPlayerAmount?: number;
   team1Name?: string;
