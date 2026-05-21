@@ -37,6 +37,8 @@ export default function PlayersPage() {
   const playerStatus = (p: Player) =>
     p.isGuest ? "guest" : p.removedFromGroup ? "removed" : p.isExempt ? "exempt" : "normal";
 
+  const groupCount = players.filter((p) => p.inGroup).length;
+
   // "Gruptan Çıktı" seçeneği sadece şu an grupta olan oyuncuları düzenlerken gösterilir
   const showRemovedOption = editPlayer ? editPlayer.inGroup : false;
 
@@ -106,7 +108,7 @@ export default function PlayersPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-slate-800">Players</h1>
-          <p className="text-slate-500 text-sm mt-0.5">{players.length} kayıtlı oyuncu</p>
+          <p className="text-slate-500 text-sm mt-0.5">Grupta {groupCount} / {players.length} oyuncu</p>
         </div>
         <div className="flex items-center gap-2">
           <button

@@ -87,6 +87,10 @@ export const UpdateTeamsSchema = z.object({
   playerTeams: z.record(z.string(), z.number().int().min(1).max(2)).optional().nullable(),
 });
 
+export const UpdateMatchCostSchema = z.object({
+  totalCost: z.number({ message: "totalCost must be a number" }).nonnegative(),
+});
+
 export const UpdateScoreSchema = z.object({
   team1Score: z.number().int().nonnegative().nullable().optional(),
   team2Score: z.number().int().nonnegative().nullable().optional(),

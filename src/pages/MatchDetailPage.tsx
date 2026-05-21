@@ -15,7 +15,7 @@ import type { Player } from "@/types/players";
 import {
   getMatch, updateTeams, updateParticipants, removeParticipant,
   getMatchRatings, submitRatings, deleteRater, suggestTeams, toggleHasPaid, payFromKasa,
-  updateScore, updatePlayerStats, setTopRunner,
+  updateScore, updatePlayerStats, setTopRunner, updateMatchCost,
 } from "@/services/matches";
 import { getPlayers } from "@/services/players";
 
@@ -42,6 +42,9 @@ export default function MatchDetailPage() {
   const [showAddPlayers, setShowAddPlayers] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [goalkeeperIds, setGoalkeeperIds] = useState<string[]>([]);
+  const [showEditFee, setShowEditFee] = useState(false);
+  const [editTotalCost, setEditTotalCost] = useState("");
+  const [savingFee, setSavingFee] = useState(false);
   const [saving, setSaving] = useState(false);
   const { showError, ToastEl } = useToast();
 
@@ -96,6 +99,12 @@ export default function MatchDetailPage() {
     init();
     loadRatings();
   }, [id, navigate, loadRatings]);
+
+  useEffect(() => {
+    if (match) {
+      setEditTotalCost(String(match.totalCost));
+    }
+  }, [match]);
 
   // ── Award computation — only recalculates when match data or ratings change ──
   const fmtN = useCallback((n: number) => (n % 1 === 0 ? String(n) : n.toFixed(1)), []);
@@ -453,6 +462,23 @@ export default function MatchDetailPage() {
 
   const hasRatings = matchRatings && matchRatings.raters.length > 0;
 
+  const handleSaveFee = async () => {
+    if (!match) return;
+    const newTotalCost = Number(editTotalCost);
+    if (Number.isNaN(newTotalCost) || newTotalCost < 0) {
+      showError("Geçerli bir ücret girin.");
+      return;
+    }
+
+    setSavingFee(true);
+    const { error } = await updateMatchCost(id, newTotalCost);
+    setSavingFee(false);
+    if (error) { showError(error); return; }
+
+    setShowEditFee(false);
+    loadMatch();
+  };
+
   const topPlayerId = hasRatings
     ? [...matchRatings!.players]
         .filter((p) => p.count > 0)
@@ -519,6 +545,14 @@ export default function MatchDetailPage() {
             <p className="text-xs font-semibold text-emerald-100 uppercase tracking-wider">Toplam</p>
           </div>
           <p className="text-xl font-bold text-white">₺{match.totalCost.toFixed(0)}</p>
+          <button
+            type="button"
+            onClick={() => setShowEditFee(true)}
+            className="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-white/80 hover:text-white"
+          >
+            <Pencil size={12} />
+            Ücreti Düzenle
+          </button>
         </div>
         <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-2xl p-4 shadow-sm">
           <div className="flex items-center gap-2 mb-2">
@@ -1127,7 +1161,7 @@ export default function MatchDetailPage() {
             <p className="text-slate-400 text-sm">Bu maçta henüz oyuncu yok.</p>
           </div>
         ) : (
-          <table className="w-full">
+          <>
             {(() => {
               const totalGoals = match.matchPlayers.reduce((s, p) => s + p.goals, 0);
               const totalAssists = match.matchPlayers.reduce((s, p) => s + p.assists, 0);
@@ -1141,6 +1175,7 @@ export default function MatchDetailPage() {
                 </div>
               ) : null;
             })()}
+            <table className="w-full">
             <thead className="bg-slate-50 border-b border-slate-100">
               <tr>
                 <th className="text-left px-5 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">Oyuncu</th>
@@ -1251,6 +1286,7 @@ export default function MatchDetailPage() {
               })}
             </tbody>
           </table>
+          </>
         )}
       </div>
 
@@ -1393,6 +1429,39 @@ export default function MatchDetailPage() {
       )}
 
       {/* ── Edit Players Modal ── */}
+      {showEditFee && (
+        <Modal title="Maç Ücretini Düzenle" onClose={() => setShowEditFee(false)}>
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                Toplam Ücret (₺)
+              </label>
+              <input
+                type="number"
+                min="0"
+                value={editTotalCost}
+                onChange={(e) => setEditTotalCost(e.target.value)}
+                className="w-full border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-slate-800"
+              />
+            </div>
+            <div className="flex gap-3 pt-1">
+              <button
+                onClick={() => setShowEditFee(false)}
+                className="flex-1 border border-slate-200 text-slate-600 py-2.5 rounded-xl hover:bg-slate-50 text-sm font-medium"
+              >
+                İptal
+              </button>
+              <button
+                onClick={handleSaveFee}
+                disabled={savingFee || editTotalCost === ""}
+                className="flex-1 bg-emerald-600 text-white py-2.5 rounded-xl hover:bg-emerald-700 disabled:opacity-50 text-sm font-medium"
+              >
+                {savingFee ? "Kaydediliyor..." : "Kaydet"}
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
       {showAddPlayers && (
         <Modal title="Oyuncuları Düzenle" onClose={() => { setShowAddPlayers(false); setSelectedIds([]); setGoalkeeperIds([]); }}>
           <div className="space-y-4">

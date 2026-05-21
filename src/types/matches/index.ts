@@ -65,6 +65,10 @@ export interface CreateMatchDto {
   playerTeams?: Record<string, 1 | 2>;
 }
 
+export interface UpdateMatchCostDto {
+  totalCost: number;
+}
+
 export interface UpdateTeamsDto {
   team1Name: string;
   team2Name: string;

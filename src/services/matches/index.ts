@@ -39,6 +39,16 @@ export async function updateTeams(id: string, payload: UpdateTeamsDto): Promise<
   return handle(res, "Takımlar kaydedilemedi");
 }
 
+export async function updateMatchCost(matchId: string, totalCost: number): Promise<Result<MatchDetail>> {
+  const res = await fetch(`/api/matches/${matchId}/fee`, {
+    method: "PATCH",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ totalCost }),
+  });
+  return handle(res, "Ücret güncellenemedi");
+}
+
 export async function addParticipants(matchId: string, playerIds: string[], goalkeeperPlayerIds?: string[]): Promise<Result<MatchDetail>> {
   const res = await fetch(`/api/matches/${matchId}/participants`, {
     method: "POST",

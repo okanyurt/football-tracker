@@ -32,6 +32,7 @@ import {
   UpdateTeamsSchema,
   UpdateScoreSchema,
   UpdatePlayerStatsSchema,
+  UpdateMatchCostSchema,
   SetTopRunnerSchema,
   parseBody,
 } from "../lib/schemas.ts";
@@ -624,6 +625,53 @@ app.patch(
     const updated = await prisma.match.update({
       where: { id: req.params.id },
       data: { cancelledAt: match.cancelledAt ? null : new Date() },
+    });
+    res.json(updated);
+  })
+);
+
+app.patch(
+  "/api/matches/:id/fee",
+  asyncRoute(async (req, res) => {
+    const parsed = parseBody(UpdateMatchCostSchema, req.body);
+    if (!parsed.ok) {
+      res.status(400).json({ error: parsed.error });
+      return;
+    }
+
+    const match = await prisma.match.findUnique({
+      where: { id: req.params.id },
+      include: { matchPlayers: true },
+    });
+    if (!match) {
+      res.status(404).json({ error: "Not found" });
+      return;
+    }
+
+    const totalCost = parsed.data.totalCost;
+    const payingCount = match.goalkeeperFree
+      ? match.matchPlayers.filter((mp) => !mp.isGoalkeeper).length
+      : match.matchPlayers.length;
+    const amountPerPlayer = payingCount > 0 ? roundCents(totalCost / payingCount) : 0;
+
+    await prisma.$transaction([
+      prisma.match.update({
+        where: { id: req.params.id },
+        data: { totalCost },
+      }),
+      ...match.matchPlayers.map((mp) =>
+        prisma.matchPlayer.update({
+          where: { id: mp.id },
+          data: {
+            amountOwed: match.goalkeeperFree && mp.isGoalkeeper ? 0 : amountPerPlayer,
+          },
+        })
+      ),
+    ]);
+
+    const updated = await prisma.match.findUnique({
+      where: { id: req.params.id },
+      include: { matchPlayers: { include: { player: true } } },
     });
     res.json(updated);
   })
