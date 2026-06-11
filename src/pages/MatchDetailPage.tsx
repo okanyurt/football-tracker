@@ -16,6 +16,7 @@ import {
   getMatch, updateTeams, updateParticipants, removeParticipant,
   getMatchRatings, submitRatings, deleteRater, suggestTeams, toggleHasPaid, payFromKasa,
   updateScore, updatePlayerStats, setTopRunner, updateMatchCost,
+  updateMatch,
 } from "@/services/matches";
 import { getPlayers } from "@/services/players";
 
@@ -46,6 +47,12 @@ export default function MatchDetailPage() {
   const [editTotalCost, setEditTotalCost] = useState("");
   const [savingFee, setSavingFee] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [showMatchEdit, setShowMatchEdit] = useState(false);
+  const [editDate, setEditDate] = useState("");
+  const [editLocation, setEditLocation] = useState("");
+  const [editNotes, setEditNotes] = useState("");
+  const [editIsPrivate, setEditIsPrivate] = useState(false);
+  const [savingMatch, setSavingMatch] = useState(false);
   const { showError, ToastEl } = useToast();
 
   // Team editing state
@@ -55,6 +62,7 @@ export default function MatchDetailPage() {
   const [editPlayerTeams, setEditPlayerTeams] = useState<Record<string, 1 | 2>>({});
   const [suggestingTeams, setSuggestingTeams] = useState(false);
   const [suggestionRatings, setSuggestionRatings] = useState<Record<string, number> | null>(null);
+  const [editGoalkeeperFree, setEditGoalkeeperFree] = useState(false);
 
   // Score editing state
   const [editingScore, setEditingScore] = useState(false);
@@ -224,6 +232,7 @@ export default function MatchDetailPage() {
     if (!match) return;
     setEditTeam1Name(match.team1Name || "Takım 1");
     setEditTeam2Name(match.team2Name || "Takım 2");
+    setEditGoalkeeperFree(match.goalkeeperFree);
     const teams: Record<string, 1 | 2> = {};
     match.matchPlayers.forEach((mp) => {
       if (mp.team === 1 || mp.team === 2) teams[mp.playerId] = mp.team;
@@ -239,11 +248,43 @@ export default function MatchDetailPage() {
 
   const saveTeams = async () => {
     setSaving(true);
-    const { error } = await updateTeams(id, { team1Name: editTeam1Name, team2Name: editTeam2Name, playerTeams: editPlayerTeams });
+    const { error } = await updateTeams(id, {
+      team1Name: editTeam1Name,
+      team2Name: editTeam2Name,
+      playerTeams: editPlayerTeams,
+      goalkeeperFree: editGoalkeeperFree,
+    });
     setSaving(false);
     if (error) { showError(error); return; }
     setEditingTeams(false);
     setSuggestionRatings(null);
+    loadMatch();
+  };
+
+  const openMatchEdit = () => {
+    if (!match) return;
+    setEditDate(new Date(match.date).toISOString().slice(0, 10));
+    setEditLocation(match.location || "");
+    setEditNotes(match.notes || "");
+    setEditIsPrivate(match.isPrivate);
+    setEditTeam1Name(match.team1Name || "Takım 1");
+    setEditTeam2Name(match.team2Name || "Takım 2");
+    setShowMatchEdit(true);
+  };
+
+  const saveMatch = async () => {
+    setSavingMatch(true);
+    const { error } = await updateMatch(id, {
+      date: editDate,
+      location: editLocation || undefined,
+      notes: editNotes || undefined,
+      isPrivate: editIsPrivate,
+      team1Name: editTeam1Name,
+      team2Name: editTeam2Name,
+    });
+    setSavingMatch(false);
+    if (error) { showError(error); return; }
+    setShowMatchEdit(false);
     loadMatch();
   };
 
@@ -519,6 +560,27 @@ export default function MatchDetailPage() {
               </span>
             )}
           </h1>
+          <div className="mt-3 flex flex-wrap items-center gap-3">
+            {(match.team1Name || match.team2Name) && (
+              <p className="text-sm text-slate-500">
+                {match.team1Name || "Takım 1"} vs {match.team2Name || "Takım 2"}
+              </p>
+            )}
+            <button
+              type="button"
+              onClick={openMatchEdit}
+              className="text-sm text-slate-600 hover:text-slate-800 font-medium"
+            >
+              Maçı Düzenle
+            </button>
+            <button
+              type="button"
+              onClick={openTeamEdit}
+              className="text-sm text-slate-600 hover:text-slate-800 font-medium"
+            >
+              Takım isimlerini düzenle
+            </button>
+          </div>
           {match.notes && <p className="text-slate-400 text-sm mt-1">{match.notes}</p>}
         </div>
 
@@ -808,7 +870,14 @@ export default function MatchDetailPage() {
       {!editingTeams ? (
         <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
           <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-slate-700">Takımlar</h2>
+            <div>
+              <h2 className="text-sm font-semibold text-slate-700">Takımlar</h2>
+              {match.goalkeeperFree && (
+                <span className="mt-1 inline-flex items-center rounded-full bg-yellow-100 text-yellow-700 text-[11px] font-semibold px-2 py-1">
+                  Kaleciler ücret ödemez
+                </span>
+              )}
+            </div>
             <div className="flex items-center gap-3">
               {hasTeams && !editingScore && (
                 <button
@@ -1082,6 +1151,18 @@ export default function MatchDetailPage() {
                 placeholder="Takım 2"
                 className="border border-orange-200 bg-orange-50 text-orange-700 rounded-xl px-3 py-2 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-orange-400"
               />
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                id="goalkeeper-free"
+                type="checkbox"
+                checked={editGoalkeeperFree}
+                onChange={(e) => setEditGoalkeeperFree(e.target.checked)}
+                className="h-4 w-4 rounded border-slate-300 text-yellow-600 focus:ring-yellow-500"
+              />
+              <label htmlFor="goalkeeper-free" className="text-sm text-slate-600">
+                Kaleciler ücret ödemez
+              </label>
             </div>
             {suggestionRatings && (
               <p className="text-xs text-violet-600 bg-violet-50 border border-violet-200 rounded-lg px-3 py-2">
@@ -1457,6 +1538,83 @@ export default function MatchDetailPage() {
                 className="flex-1 bg-emerald-600 text-white py-2.5 rounded-xl hover:bg-emerald-700 disabled:opacity-50 text-sm font-medium"
               >
                 {savingFee ? "Kaydediliyor..." : "Kaydet"}
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+      {showMatchEdit && (
+        <Modal title="Maç Bilgilerini Düzenle" onClose={() => setShowMatchEdit(false)}>
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">Tarih</label>
+                <input
+                  type="date"
+                  value={editDate}
+                  onChange={(e) => setEditDate(e.target.value)}
+                  className="w-full border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-slate-800"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">Konum</label>
+                <input
+                  type="text"
+                  value={editLocation}
+                  onChange={(e) => setEditLocation(e.target.value)}
+                  placeholder="Saha / Konum"
+                  className="w-full border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-slate-800"
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <input
+                type="text"
+                value={editTeam1Name}
+                onChange={(e) => setEditTeam1Name(e.target.value)}
+                placeholder="Takım 1"
+                className="border border-blue-200 bg-blue-50 text-blue-700 rounded-xl px-3 py-2 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-400"
+              />
+              <input
+                type="text"
+                value={editTeam2Name}
+                onChange={(e) => setEditTeam2Name(e.target.value)}
+                placeholder="Takım 2"
+                className="border border-orange-200 bg-orange-50 text-orange-700 rounded-xl px-3 py-2 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-orange-400"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">Not</label>
+              <input
+                type="text"
+                value={editNotes}
+                onChange={(e) => setEditNotes(e.target.value)}
+                placeholder="Ek bilgi..."
+                className="w-full border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-slate-800"
+              />
+            </div>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={editIsPrivate}
+                onChange={(e) => setEditIsPrivate(e.target.checked)}
+                className="accent-emerald-600"
+              />
+              <span className="text-sm font-medium text-slate-700">Özel maç</span>
+            </label>
+            <div className="flex gap-3 pt-1">
+              <button
+                onClick={() => setShowMatchEdit(false)}
+                className="flex-1 border border-slate-200 text-slate-600 py-2.5 rounded-xl hover:bg-slate-50 text-sm font-medium"
+              >
+                İptal
+              </button>
+              <button
+                onClick={saveMatch}
+                disabled={savingMatch || !editDate}
+                className="flex-1 bg-emerald-600 text-white py-2.5 rounded-xl hover:bg-emerald-700 disabled:opacity-50 text-sm font-medium"
+              >
+                {savingMatch ? "Kaydediliyor..." : "Kaydet"}
               </button>
             </div>
           </div>

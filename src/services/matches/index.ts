@@ -1,4 +1,4 @@
-import type { MatchListItem, MatchDetail, CreateMatchDto, UpdateTeamsDto, MatchRatingData, SuggestTeamsResult } from "@/types/matches";
+import type { MatchListItem, MatchDetail, CreateMatchDto, UpdateMatchDto, UpdateTeamsDto, MatchRatingData, SuggestTeamsResult } from "@/types/matches";
 import { handle, type Result } from "@/services/shared";
 
 export async function getMatches(): Promise<Result<MatchListItem[]>> {
@@ -37,6 +37,15 @@ export async function updateTeams(id: string, payload: UpdateTeamsDto): Promise<
     body: JSON.stringify(payload),
   });
   return handle(res, "Takımlar kaydedilemedi");
+}
+
+export async function updateMatch(id: string, payload: UpdateMatchDto): Promise<Result<MatchDetail>> {
+  const res = await fetch(`/api/matches/${id}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  return handle(res, "Maç güncellenemedi");
 }
 
 export async function updateMatchCost(matchId: string, totalCost: number): Promise<Result<MatchDetail>> {

@@ -69,10 +69,21 @@ export interface UpdateMatchCostDto {
   totalCost: number;
 }
 
+export interface UpdateMatchDto {
+  date?: string;
+  location?: string;
+  notes?: string;
+  team1Name?: string;
+  team2Name?: string;
+  isPrivate?: boolean;
+  goalkeeperFree?: boolean;
+}
+
 export interface UpdateTeamsDto {
   team1Name: string;
   team2Name: string;
   playerTeams: Record<string, 1 | 2>;
+  goalkeeperFree?: boolean;
 }
 
 export interface PlayerRatingSummary {

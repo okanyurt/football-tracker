@@ -30,6 +30,7 @@ import {
   SubmitRatingsSchema,
   UpdatePlayerSchema,
   UpdateTeamsSchema,
+  UpdateMatchSchema,
   UpdateScoreSchema,
   UpdatePlayerStatsSchema,
   UpdateMatchCostSchema,
@@ -38,6 +39,20 @@ import {
 } from "../lib/schemas.ts";
 
 const app = express();
+
+// Ensure req.params.id is treated as a string (prisma expects string ids)
+declare global {
+  namespace Express {
+    interface Request {
+      params: { id: string };
+    }
+  }
+}
+
+const routeId = (req: Request) => String(req.params.id);
+
+export {};
+
 app.set("trust proxy", 1);
 const port = Number(process.env.API_PORT ?? 3000);
 const MAX_FAILED_ATTEMPTS = 5;
@@ -608,6 +623,73 @@ app.get(
   })
 );
 
+  app.put(
+    "/api/matches/:id",
+    asyncRoute(async (req, res) => {
+      const parsed = parseBody(UpdateMatchSchema, req.body);
+      if (!parsed.ok) {
+        res.status(400).json({ error: parsed.error });
+        return;
+      }
+
+      const match = await prisma.match.findFirst({
+        where: { id: req.params.id, deletedAt: null },
+        include: { matchPlayers: true },
+      });
+      if (!match) {
+        res.status(404).json({ error: "Not found" });
+        return;
+      }
+
+      const updateData: Record<string, unknown> = {};
+      if (parsed.data.date) updateData.date = new Date(parsed.data.date);
+      if (parsed.data.location !== undefined) updateData.location = parsed.data.location?.trim() || null;
+      if (parsed.data.notes !== undefined) updateData.notes = parsed.data.notes?.trim() || null;
+      if (parsed.data.team1Name !== undefined) updateData.team1Name = parsed.data.team1Name?.trim() || null;
+      if (parsed.data.team2Name !== undefined) updateData.team2Name = parsed.data.team2Name?.trim() || null;
+      if (parsed.data.isPrivate !== undefined) updateData.isPrivate = parsed.data.isPrivate;
+
+      const shouldRecalculateGk = parsed.data.goalkeeperFree !== undefined;
+      if (shouldRecalculateGk) {
+        updateData.goalkeeperFree = parsed.data.goalkeeperFree;
+      }
+
+      const transactionOps = [
+        prisma.match.update({
+          where: { id: req.params.id },
+          data: updateData,
+        }),
+      ];
+
+      if (shouldRecalculateGk) {
+        const newGoalkeeperFree = parsed.data.goalkeeperFree === true;
+        const payingCount = newGoalkeeperFree
+          ? match.matchPlayers.filter((mp) => !mp.isGoalkeeper).length
+          : match.matchPlayers.length;
+        const amountPerPlayer = payingCount > 0 ? roundCents(match.totalCost / payingCount) : 0;
+
+        transactionOps.push(
+          ...match.matchPlayers.map((mp) =>
+            prisma.matchPlayer.update({
+              where: { id: mp.id },
+              data: {
+                amountOwed: newGoalkeeperFree && mp.isGoalkeeper ? 0 : amountPerPlayer,
+              },
+            })
+          )
+        );
+      }
+
+      await prisma.$transaction(transactionOps);
+
+      const updated = await prisma.match.findUnique({
+        where: { id: req.params.id },
+        include: { matchPlayers: { include: { player: true } } },
+      });
+      res.json(updated);
+    })
+  );
+
 app.patch(
   "/api/matches/:id",
   asyncRoute(async (req, res) => {
@@ -720,7 +802,7 @@ app.patch(
       return;
     }
 
-    const { team1Name, team2Name, playerTeams } = parsed.data;
+    const { team1Name, team2Name, playerTeams, goalkeeperFree } = parsed.data;
     const match = await prisma.match.findUnique({
       where: { id: req.params.id },
       include: { matchPlayers: true },
@@ -730,18 +812,28 @@ app.patch(
       return;
     }
 
+    const newGoalkeeperFree = goalkeeperFree === true;
+    const payingCount = newGoalkeeperFree
+      ? match.matchPlayers.filter((mp) => !mp.isGoalkeeper).length
+      : match.matchPlayers.length;
+    const amountPerPlayer = payingCount > 0 ? roundCents(match.totalCost / payingCount) : 0;
+
     await prisma.$transaction([
       prisma.match.update({
         where: { id: req.params.id },
         data: {
           team1Name: team1Name?.trim() || null,
           team2Name: team2Name?.trim() || null,
+          goalkeeperFree: newGoalkeeperFree,
         },
       }),
       ...match.matchPlayers.map((mp) =>
         prisma.matchPlayer.update({
           where: { id: mp.id },
-          data: { team: playerTeams?.[mp.playerId] ?? null },
+          data: {
+            ...(playerTeams ? { team: playerTeams[mp.playerId] ?? null } : {}),
+            amountOwed: newGoalkeeperFree && mp.isGoalkeeper ? 0 : amountPerPlayer,
+          },
         })
       ),
     ]);

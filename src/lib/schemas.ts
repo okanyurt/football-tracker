@@ -85,10 +85,21 @@ export const UpdateTeamsSchema = z.object({
   team1Name: z.string().max(50).trim().optional().nullable(),
   team2Name: z.string().max(50).trim().optional().nullable(),
   playerTeams: z.record(z.string(), z.number().int().min(1).max(2)).optional().nullable(),
+  goalkeeperFree: z.boolean().optional(),
 });
 
 export const UpdateMatchCostSchema = z.object({
   totalCost: z.number({ message: "totalCost must be a number" }).nonnegative(),
+});
+
+export const UpdateMatchSchema = z.object({
+  date: z.string().min(1, "Date is required").optional(),
+  location: z.string().max(200).trim().optional().nullable(),
+  notes: z.string().max(1000).trim().optional().nullable(),
+  team1Name: z.string().max(50).trim().optional().nullable(),
+  team2Name: z.string().max(50).trim().optional().nullable(),
+  isPrivate: z.boolean().optional(),
+  goalkeeperFree: z.boolean().optional(),
 });
 
 export const UpdateScoreSchema = z.object({

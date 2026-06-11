@@ -1,16 +1,16 @@
 {
   "name": "football-tracker",
-  "version": "1.1.5",
+  "version": "1.1.6",
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "concurrently -k -n api,client -c green,cyan \"npm run dev:api\" \"node scripts/start-client-after-api.mjs\"",
-    "dev:api": "API_PORT=3001 node --experimental-strip-types src/server/index.ts",
-    "dev:client": "vite",
+    "dev": "concurrently -k -n api,client -c green,cyan \"npm run dev:api\" \"npm run dev:client\"",
+    "dev:api": "API_PORT=3001 tsx src/server/index.ts",
+    "dev:client": "vite --host 0.0.0.0 --port 3000",
     "build": "vite build",
     "preview": "vite preview --host 0.0.0.0",
     "postinstall": "prisma generate",
-    "start": "NODE_ENV=production node --experimental-strip-types src/server/index.ts",
+    "start": "NODE_ENV=production tsx src/server/index.ts",
     "db:push": "prisma db push",
     "db:studio": "prisma studio",
     "db:seed": "node --experimental-strip-types prisma/seed.ts"
